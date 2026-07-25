@@ -1,0 +1,4 @@
+import type { ButtonHTMLAttributes, ReactNode } from 'react'
+export function Button({children,className='',...props}:ButtonHTMLAttributes<HTMLButtonElement>){return <button className={`action ${className}`} {...props}>{children}</button>}
+export function Avatar({name}:{name:string}){return <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet to-[#a99eff] text-xs font-extrabold text-white">{name.split(' ').map(x=>x[0]).join('')}</span>}
+export function Status({children}:{children:ReactNode}){const value=String(children);return <span className={`rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wide ${value==='Active'||value==='Matched'?'bg-mint text-emerald-900':value==='Review'?'bg-coral/20 text-orange-900':'bg-[#fff0bd] text-amber-900'}`}>{children}</span>}

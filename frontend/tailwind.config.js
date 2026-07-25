@@ -1,0 +1,1 @@
+export default { content:['./index.html','./src/**/*.{ts,tsx}'], theme:{extend:{fontFamily:{display:['Georgia','serif'],sans:['Inter','ui-sans-serif','system-ui']},colors:{ink:'#211b47',violet:'#6558e8',mint:'#bdf4d1',coral:'#ff937f'},boxShadow:{float:'0 24px 64px rgba(37,28,77,.12)'}}},plugins:[] }
