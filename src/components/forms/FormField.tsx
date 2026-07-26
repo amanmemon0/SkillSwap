@@ -1,3 +1,0 @@
-import type { InputHTMLAttributes, ReactNode } from 'react'
-import { Input } from '../ui'
-export function FormField({ label, error, icon, ...props }: InputHTMLAttributes<HTMLInputElement> & { label: string; error?: string; icon?: ReactNode }) { return <label className="block"><span className="mb-1.5 block text-sm font-medium text-slate-700">{label}</span><div className="relative">{icon && <span className="absolute left-3 top-3.5 text-slate-400">{icon}</span>}<Input className={`${icon ? 'pl-10' : ''} ${error ? 'border-rose-400' : ''}`} {...props}/></div>{error && <p role="alert" className="mt-1 text-xs font-medium text-rose-600">{error}</p>}</label> }
