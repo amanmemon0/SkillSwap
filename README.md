@@ -39,9 +39,6 @@ The frontend is a modern single-page application (SPA) optimized for performance
 
 ---
 
-## 🎨 Design System & Tokens
-
-The application features a premium, customized color palette and font pairing configured in [`frontend/tailwind.config.js`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/tailwind.config.js) and applied in [`frontend/src/index.css`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/index.css):
 
 ### Color Palette
 - **Ink (`#211b47`)**: Deep dark violet/purple used for high-contrast headers, text, and main containers.
@@ -82,22 +79,4 @@ npm run build
 
 ---
 
-## 🔑 Demo Sign-In Credentials
-
-The application includes pre-configured mock credentials for demonstration purposes. These sessions are managed client-side in `localStorage` inside [`frontend/src/auth/demoAuth.ts`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/auth/demoAuth.ts).
-
-| Role | Email | Password | Landing Page / Destination |
-| :--- | :--- | :--- | :--- |
-| **Member** | `user@skillswap.city` | `User@123` | [`/dashboard`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/pages/UserDashboard.tsx) |
-| **Admin** | `admin@skillswap.city` | `Admin@123` | [`/admin`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/pages/Admin.tsx) |
-
----
-
-## ⚡ Mock Data & Backend Integration
-
-The app uses mock data located at [`frontend/src/data/mock.ts`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/data/mock.ts) to populate metrics, user recommendations, and exchange request tables.
-
-**To transition to a real backend:**
-1. Replace the helper methods in [`frontend/src/auth/demoAuth.ts`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/auth/demoAuth.ts) with real authentication API calls (e.g., JWT, OAuth, or Firebase).
-2. Swap the imported mock lists in [`frontend/src/pages/Admin.tsx`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/pages/Admin.tsx) and [`frontend/src/pages/UserDashboard.tsx`](file:///c:/Users/lahar/Desktop/cp/SkillSwap/frontend/src/pages/UserDashboard.tsx) with data fetched from backend service adapters or React Query / Axios calls.
 
