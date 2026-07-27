@@ -50,6 +50,8 @@ export default function Login() {
       }
 
       if (authData?.user) {
+        console.log('Supabase Authenticated User ID:', authData.user.id);
+
         // Query the profile to get the user's role
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -57,12 +59,14 @@ export default function Login() {
           .eq('id', authData.user.id)
           .single();
 
+        console.log('Database Profile Row Fetched:', profile);
         if (profileError) {
-          console.error('Error fetching profile role:', profileError.message);
+          console.error('Error fetching profile role:', profileError.message, profileError);
         }
 
         // Use profile role, or fallback to metadata role, or default to 'user'
         const role = profile?.role || authData.user.user_metadata?.role || 'user';
+        console.log('Resolved Application Role:', role);
 
         if (role === 'admin') {
           nav('/admin');
