@@ -1,257 +1,41 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
-import {
-  BarChart3,
-  Bell,
-  ChevronLeft,
-  ChevronRight,
-  CirclePlus,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  Search,
-  Settings,
-  Shapes,
-  Users,
-  Waypoints,
-  X,
-} from 'lucide-react';
-import { growth, metrics, people, requests } from '../data/mock';
-import { Avatar, Button, Status } from '../components/ui/Primitives';
-import { supabase } from '../auth/supabaseClient';
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
+import { BarChart3, Bell, Check, ChevronLeft, ChevronRight, CirclePlus, LayoutDashboard, LogOut, Menu, MoreHorizontal, Search, Settings, Shapes, SlidersHorizontal, Users, Waypoints, X } from 'lucide-react'
+import { growth, metrics, people, requests } from '../data/mock'
+import { Avatar, Button, Status } from '../components/ui/Primitives'
+import { supabase } from '../auth/supabaseClient'
 
-const menu = [
-  ['Dashboard', LayoutDashboard],
-  ['Members', Users],
-  ['Skills', Shapes],
-  ['Exchanges', Waypoints],
-  ['Insights', BarChart3],
-  ['Settings', Settings],
-] as const;
+type Row = [string, string, string, string]
+type Section = 'Dashboard' | 'Members' | 'Skills' | 'Exchanges' | 'Insights' | 'Settings'
+const menu: Array<[Section, typeof LayoutDashboard]> = [['Dashboard', LayoutDashboard], ['Members', Users], ['Skills', Shapes], ['Exchanges', Waypoints], ['Insights', BarChart3], ['Settings', Settings]]
+const notificationsSeed = [{ id: 1, text: '7 profiles are waiting for review.', read: false }, { id: 2, text: 'A new admin joined your workspace.', read: false }, { id: 3, text: 'Weekly community report is ready.', read: true }]
+const skills = [{ name: 'Product & design', count: 624, color: 'bg-violet' }, { name: 'Technology', count: 508, color: 'bg-cyan-500' }, { name: 'Languages', count: 412, color: 'bg-coral' }, { name: 'Creative arts', count: 368, color: 'bg-emerald-500' }]
 
-function List({ title, rows }: { title: string; rows: string[][] }) {
-  return (
-    <section className="overflow-hidden rounded-3xl border bg-white">
-      <div className="flex items-center justify-between p-5">
-        <h3 className="font-display text-xl">{title}</h3>
-        <button className="text-xs font-extrabold text-violet">See all →</button>
-      </div>
-      <div className="divide-y">
-        {rows.map((r) => (
-          <div className="flex items-center gap-3 px-5 py-3.5" key={r[0]}>
-            <Avatar name={r[0]} />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-extrabold">{r[0]}</p>
-              <p className="truncate text-xs text-ink/55">{r[1]}</p>
-            </div>
-            <div className="hidden text-right text-xs text-ink/40 sm:block">{r[2]}</div>
-            <Status>{r[3]}</Status>
-            <button aria-label={`Open ${r[0]}`} className="text-ink/35 hover:text-violet">
-              •••
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
+function PageTitle({ label, title, copy, action }: { label: string; title: string; copy: string; action?: ReactNode }) { return <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Admin workspace / {label}</p><h1 className="mt-2 font-display text-4xl sm:text-5xl">{title}</h1><p className="mt-2 text-sm text-ink/55">{copy}</p></div>{action}</div> }
+
+function DataList({ title, rows, onSelect }: { title: string; rows: Row[]; onSelect: (row: Row) => void }) { return <section className="overflow-hidden rounded-3xl border bg-white"><div className="flex items-center justify-between p-5"><h3 className="font-display text-xl">{title}</h3><span className="rounded-full bg-[#f7f5f2] px-2.5 py-1 text-xs font-bold text-ink/50">{rows.length} total</span></div><div className="divide-y">{rows.length ? rows.map(row=><div className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-[#f7f5f2]" key={row[0]}><Avatar name={row[0]}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{row[0]}</p><p className="truncate text-xs text-ink/55">{row[1]}</p></div><div className="hidden text-right text-xs text-ink/40 sm:block">{row[2]}</div><Status>{row[3]}</Status><button type="button" onClick={()=>onSelect(row)} aria-label={`Open ${row[0]}`} className="rounded-full p-1.5 text-ink/35 hover:bg-white hover:text-violet"><MoreHorizontal size={18}/></button></div>) : <p className="p-10 text-center text-sm text-ink/45">No matching records found.</p>}</div></section> }
+
+function DashboardView({ peopleRows, requestRows, onSelect, onMetric }: { peopleRows: Row[]; requestRows: Row[]; onSelect: (row: Row) => void; onMetric: (message: string) => void }) { return <><PageTitle label="Dashboard" title="The community is humming." copy="A living snapshot of your SkillSwap community."/><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(([label, value, note], index)=><button key={label} type="button" onClick={()=>onMetric(`${label}: ${value} Ã¢â‚¬â€ ${note}`)} className={`relative overflow-hidden rounded-3xl p-5 text-left transition hover:-translate-y-1 hover:shadow-float ${index===0?'bg-violet text-white':index===2?'bg-mint':'bg-white'}`}><p className={`text-xs font-bold ${index===0?'text-white/60':'text-ink/45'}`}>{label}</p><p className="mt-7 text-3xl font-extrabold tracking-tight">{value}</p><p className={`mt-2 text-xs ${index===0?'text-mint':'text-ink/55'}`}>{note}</p><span className="absolute -right-3 -top-5 font-display text-8xl opacity-10">0{index+1}</span></button>)}</section><section className="mt-5 grid gap-5 xl:grid-cols-[1.4fr_.6fr]"><article className="rounded-3xl bg-ink p-6 text-white"><div className="flex items-start justify-between"><div><p className="eyebrow text-mint">Community growth</p><h2 className="mt-2 font-display text-2xl">A good kind of momentum.</h2></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs text-mint">+18.4%</span></div><div className="mt-8 h-52"><ResponsiveContainer><AreaChart data={growth}><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#bdf4d1" stopOpacity=".45"/><stop offset="1" stopColor="#bdf4d1" stopOpacity="0"/></linearGradient></defs><XAxis dataKey="m" tickLine={false} axisLine={false} tick={{ fill:'#fff',fillOpacity:.45,fontSize:11 }}/><Tooltip/><Area type="monotone" dataKey="v" stroke="#bdf4d1" strokeWidth={3} fill="url(#area)"/></AreaChart></ResponsiveContainer></div></article><article className="rounded-3xl bg-coral p-6"><p className="eyebrow text-ink/70">The pulse</p><p className="mt-6 font-display text-4xl leading-tight">42 new conversations started today.</p><p className="mt-7 border-t border-ink/15 pt-4 text-sm text-ink/65">Peak activity lands around 7:30pm Ã¢â‚¬â€ a perfect moment to encourage new matches.</p></article></section><section className="mt-5 grid gap-5 xl:grid-cols-2"><DataList title="New faces" rows={peopleRows.slice(0,3)} onSelect={onSelect}/><DataList title="Exchange requests" rows={requestRows.slice(0,3)} onSelect={onSelect}/></section></> }
 
 export default function Admin() {
-  const nav = useNavigate();
-  const [open, setOpen] = useState(false);
-  const [small, setSmall] = useState(false);
-  const [adminName, setAdminName] = useState('Admin');
-  const [activePage, setActivePage] = useState('Dashboard');
-
-  useEffect(() => {
-    const getAdminProfile = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('full_name')
-            .eq('id', session.user.id)
-            .single();
-
-          if (error) {
-            console.error('Error fetching admin name:', error.message);
-          }
-
-          if (data?.full_name) {
-            setAdminName(data.full_name);
-          } else {
-            setAdminName(session.user.user_metadata?.full_name || 'Admin');
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load admin profile:', err);
-      }
-    };
-    getAdminProfile();
-  }, []);
-
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
-    }
-    nav('/login');
-  };
-
-  return (
-    <div className="min-h-screen bg-[#f7f5f2]">
-      <aside
-        className={`fixed inset-y-0 z-30 flex w-64 flex-col bg-ink p-4 text-white transition-transform lg:translate-x-0 ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        } ${small ? 'lg:w-20' : ''}`}
-      >
-        <div className="mb-12 flex items-center justify-between px-2">
-          <span className="flex items-center gap-2 text-sm font-extrabold">
-            <i className="grid h-8 w-8 place-items-center rounded-full bg-mint font-display text-lg text-ink">
-              S
-            </i>
-            {!small && 'SkillSwap'}
-          </span>
-          <button className="lg:hidden" onClick={() => setOpen(false)}>
-            <X />
-          </button>
-        </div>
-        <nav className="space-y-1">
-          {menu.map(([n, I]) => (
-            <button
-              key={n}
-              type="button"
-              onClick={() => { setActivePage(n); setOpen(false); }}
-              className={`navlink w-full ${activePage === n ? 'navlink-active' : ''} ${small ? 'justify-center' : ''}`}
-              title={n}
-              aria-current={activePage === n ? 'page' : undefined}
-            >
-              <I size={18} />
-              {!small && n}
-            </button>
-          ))}
-        </nav>
-        <p className={`mt-auto rounded-2xl bg-white/10 p-3 text-xs leading-5 text-white/60 ${small ? 'hidden' : ''}`}>
-          Your community has grown <b className="text-mint">18.4%</b> this month.
-        </p>
-      </aside>
-
-      <div className={`min-h-screen transition-[margin] lg:ml-64 ${small ? 'lg:ml-20' : ''}`}>
-        <header className="flex h-20 items-center justify-between px-5 sm:px-8">
-          <div className="flex items-center gap-3">
-            <button onClick={() => setOpen(true)} aria-label="Open menu" className="lg:hidden">
-              <Menu />
-            </button>
-            <button
-              onClick={() => setSmall(!small)}
-              aria-label="Toggle sidebar"
-              className="hidden rounded-full border bg-white p-2 lg:block"
-            >
-              {small ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-            </button>
-            <div className="relative hidden sm:block">
-              <Search size={15} className="absolute left-3 top-3 text-ink/40" />
-              <input
-                className="rounded-full border-0 bg-white py-2.5 pl-9 pr-4 text-xs outline-none ring-1 ring-ink/10 focus:ring-violet"
-                placeholder="Search the city"
-              />
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button className="relative rounded-full bg-white p-2.5">
-              <Bell size={17} />
-              <i className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-coral" />
-            </button>
-            <button onClick={logout} title="Log out" className="rounded-full bg-white p-2.5 hover:bg-ink/5">
-              <LogOut size={17} />
-            </button>
-            <Avatar name={adminName} />
-          </div>
-        </header>
-
-        <main className="mx-auto max-w-7xl px-5 pb-10 sm:px-8">
-          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="eyebrow">Friday / 25 July</p>
-              <h1 className="mt-2 font-display text-4xl sm:text-5xl">The city is humming.</h1>
-              <p className="mt-2 text-sm text-ink/55">A living snapshot of your SkillSwap community.</p>
-            </div>
-            <Button className="bg-ink text-white hover:bg-violet">
-              <CirclePlus size={17} /> Add a member
-            </Button>
-          </div>
-
-          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {metrics.map(([l, v, n], i) => (
-              <article
-                key={l}
-                className={`relative overflow-hidden rounded-3xl p-5 ${
-                  i === 0 ? 'bg-violet text-white' : i === 2 ? 'bg-mint' : 'bg-white'
-                }`}
-              >
-                <p className={`text-xs font-bold ${i === 0 ? 'text-white/60' : 'text-ink/45'}`}>{l}</p>
-                <p className="mt-7 text-3xl font-extrabold tracking-tight">{v}</p>
-                <p className={`mt-2 text-xs ${i === 0 ? 'text-mint' : 'text-ink/55'}`}>{n}</p>
-                <span className="absolute -right-3 -top-5 font-display text-8xl opacity-10">0{i + 1}</span>
-              </article>
-            ))}
-          </section>
-
-          <section className="mt-5 grid gap-5 xl:grid-cols-[1.4fr_.6fr]">
-            <article className="rounded-3xl bg-ink p-6 text-white">
-              <div className="flex items-start justify-between">
-                <div>
-                  <p className="eyebrow text-mint">Community growth</p>
-                  <h2 className="mt-2 font-display text-2xl">A good kind of momentum.</h2>
-                </div>
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-mint">+18.4%</span>
-              </div>
-              <div className="mt-8 h-52">
-                <ResponsiveContainer>
-                  <AreaChart data={growth}>
-                    <defs>
-                      <linearGradient id="area" x1="0" x2="0" y1="0" y2="1">
-                        <stop stopColor="#bdf4d1" stopOpacity=".45" />
-                        <stop offset="1" stopColor="#bdf4d1" stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="m"
-                      tickLine={false}
-                      axisLine={false}
-                      tick={{ fill: '#fff', fillOpacity: 0.45, fontSize: 11 }}
-                    />
-                    <Tooltip />
-                    <Area
-                      type="monotone"
-                      dataKey="v"
-                      stroke="#bdf4d1"
-                      strokeWidth={3}
-                      fill="url(#area)"
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </article>
-
-            <article className="rounded-3xl bg-coral p-6">
-              <p className="eyebrow text-ink/70">The pulse</p>
-              <p className="mt-6 font-display text-4xl leading-tight">42 new conversations started today.</p>
-              <p className="mt-7 border-t border-ink/15 pt-4 text-sm text-ink/65">
-                Peak activity lands around 7:30pm — perfect timing for a thoughtful prompt.
-              </p>
-            </article>
-          </section>
-
-          <section className="mt-5 grid gap-5 xl:grid-cols-2">
-            <List title="New faces" rows={people} />
-            <List title="Exchange requests" rows={requests} />
-          </section>
-        </main>
-      </div>
-    </div>
-  );
+  const nav = useNavigate(); const [open, setOpen] = useState(false); const [small, setSmall] = useState(false); const [adminName, setAdminName] = useState('Admin'); const [activePage, setActivePage] = useState<Section>('Dashboard'); const [search, setSearch] = useState(''); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notifications, setNotifications] = useState(notificationsSeed); const [peopleRows, setPeopleRows] = useState<Row[]>(people as Row[]); const [requestRows, setRequestRows] = useState<Row[]>(requests as Row[]); const [selected, setSelected] = useState<Row | null>(null); const [memberModal, setMemberModal] = useState(false); const [memberName, setMemberName] = useState(''); const [memberSkill, setMemberSkill] = useState(''); const [toast, setToast] = useState(''); const [settings, setSettings] = useState<{ review: boolean; email: boolean; weekly: boolean }>(() => { try { return { review: true, email: true, weekly: false, ...JSON.parse(localStorage.getItem('skillswap-admin-settings') || '{}') } } catch { return { review: true, email: true, weekly: false } } })
+  useEffect(() => { const load = async () => { const { data: { session } } = await supabase.auth.getSession(); if (!session?.user) return; const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single(); setAdminName(data?.full_name || session.user.user_metadata?.full_name || 'Admin') }; load() }, [])
+  useEffect(() => { localStorage.setItem('skillswap-admin-settings', JSON.stringify(settings)) }, [settings])
+  const notify = (message: string) => { setToast(message); window.setTimeout(()=>setToast(''),2600) }
+  const logout = async () => { await supabase.auth.signOut(); nav('/login') }
+  const query = search.toLowerCase(); const filteredPeople = useMemo(()=>peopleRows.filter(row=>row.join(' ').toLowerCase().includes(query)),[peopleRows,query]); const filteredRequests = useMemo(()=>requestRows.filter(row=>row.join(' ').toLowerCase().includes(query)),[requestRows,query]); const visibleNotifications = settings.review ? notifications : notifications.filter(item=>!item.text.includes('profiles')); const unread = visibleNotifications.filter(item=>!item.read).length
+  const addMember = (event: FormEvent) => { event.preventDefault(); if (!memberName.trim() || !memberSkill.trim()) return notify('Enter a name and primary skill first.'); const name=memberName.trim(); setPeopleRows(current=>[[name,memberSkill.trim(),'Just now','Active'],...current]); setMemberName(''); setMemberSkill(''); setMemberModal(false); notify(`${name} was added to the community.`) }
+  const removeSelected = () => { if (!selected) return; const name=selected[0]; setPeopleRows(current=>current.filter(row=>row[0]!==name)); setRequestRows(current=>current.filter(row=>row[0]!==name)); setSelected(null); notify(`${name} was removed from this local list.`) }
+  const selectPage = (page: Section) => { setActivePage(page); setOpen(false); setSearch('') }
+  const renderContent = () => {
+    if (activePage==='Dashboard') return <DashboardView peopleRows={filteredPeople} requestRows={filteredRequests} onSelect={setSelected} onMetric={notify}/>
+    if (activePage==='Members') return <><PageTitle label="Members" title="Your community, at a glance." copy="Search, review, and manage every member in the network." action={<Button onClick={()=>setMemberModal(true)} className="bg-ink text-white hover:bg-violet"><CirclePlus size={17}/> Add a member</Button>}/><DataList title="All members" rows={filteredPeople} onSelect={setSelected}/></>
+    if (activePage==='Skills') return <><PageTitle label="Skills" title="What the community is sharing." copy="Monitor the subjects that bring people together."/><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{skills.map(skill=><button type="button" key={skill.name} onClick={()=>notify(`${skill.name} has ${skill.count} active skills.`)} className="rounded-3xl bg-white p-6 text-left transition hover:-translate-y-1 hover:shadow-float"><i className={`block h-3 w-3 rounded-full ${skill.color}`}/><p className="mt-8 font-display text-3xl">{skill.count}</p><p className="mt-1 text-sm font-bold text-ink/60">{skill.name}</p></button>)}</section><div className="mt-5 rounded-3xl border bg-white p-6"><p className="eyebrow">Moderation queue</p><h2 className="mt-2 font-display text-3xl">18 new skills need a quick review.</h2><Button onClick={()=>notify('Skill review queue opened.')} className="mt-6 bg-ink text-white hover:bg-violet">Review skills <ArrowRightIcon/></Button></div></>
+    if (activePage==='Exchanges') return <><PageTitle label="Exchanges" title="Every good swap starts here." copy="Keep an eye on active, pending, and completed member exchanges."/><DataList title="All exchange requests" rows={filteredRequests} onSelect={setSelected}/></>
+    if (activePage==='Insights') return <><PageTitle label="Insights" title="Understand the momentum." copy="See what is growing and where members need more support."/><section className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]"><article className="rounded-3xl bg-white p-6"><p className="eyebrow">Member activity</p><h2 className="mt-2 font-display text-3xl">Monthly connection rate</h2><div className="mt-8 h-72"><ResponsiveContainer><BarChart data={growth}><XAxis dataKey="m" axisLine={false} tickLine={false}/><Tooltip/><Bar dataKey="v" radius={[8,8,0,0]} fill="#6558e8"/></BarChart></ResponsiveContainer></div></article><article className="rounded-3xl bg-mint p-6"><p className="eyebrow text-ink/60">Quick read</p><p className="mt-7 font-display text-5xl">68%</p><p className="mt-2 text-sm leading-6 text-ink/65">of active members return within seven days of their first completed exchange.</p><button type="button" onClick={()=>notify('Weekly insight report generated.')} className="mt-10 text-sm font-extrabold underline underline-offset-4">Generate report</button></article></section></>
+    return <><PageTitle label="Settings" title="Make the workspace yours." copy="These preferences are stored in this browser and update the dashboard immediately."/><section className="max-w-2xl rounded-3xl bg-white p-6 sm:p-8"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet/10 text-violet"><SlidersHorizontal size={20}/></span><div><h2 className="font-display text-3xl">Admin preferences</h2><p className="text-sm text-ink/55">Your changes save automatically.</p></div></div><div className="mt-8 divide-y">{[['review','Profile review alerts','Shows or hides profile-review notifications in the bell menu.'],['email','Email activity summaries','Records whether you want activity summaries when email delivery is connected.'],['weekly','Weekly insight digest','Turns on the weekly report preference for the Insights workspace.']].map(([key,label,detail])=><label key={key} className="flex cursor-pointer items-center justify-between gap-5 py-5"><span><span className="block text-sm font-bold">{label}</span><span className="mt-1 block max-w-md text-xs leading-5 text-ink/50">{detail}</span></span><input type="checkbox" checked={settings[key as keyof typeof settings]} onChange={()=>setSettings(current=>({...current,[key]:!current[key as keyof typeof current]}))} className="h-5 w-5 shrink-0 accent-violet"/></label>)}</div><div className="mt-7 rounded-2xl bg-[#f7f5f2] p-4"><p className="text-xs font-extrabold uppercase tracking-wide text-ink/45">Live dashboard effect</p><p className="mt-2 text-sm font-bold">Review alerts are <span className={settings.review?'text-emerald-700':'text-coral'}>{settings.review?'visible in Notifications':'hidden from Notifications'}</span>.</p><p className="mt-1 text-sm text-ink/60">Weekly digest: <b>{settings.weekly?'enabled':'paused'}</b> Â· Email summaries: <b>{settings.email?'enabled':'paused'}</b></p></div><Button onClick={()=>notify('Preferences are saved in this browser.')} className="mt-7 bg-ink text-white hover:bg-violet">Save preferences</Button></section></>  }
+  return <div className="min-h-screen bg-[#f7f5f2]"><aside className={`fixed inset-y-0 z-30 flex w-64 flex-col bg-ink p-4 text-white transition-transform lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'} ${small?'lg:w-20':''}`}><div className="mb-12 flex items-center justify-between px-2"><span className="flex items-center gap-2 text-sm font-extrabold"><i className="grid h-8 w-8 place-items-center rounded-full bg-mint font-display text-lg text-ink">S</i>{!small&&'SkillSwap'}</span><button type="button" aria-label="Close menu" className="lg:hidden" onClick={()=>setOpen(false)}><X/></button></div><nav className="space-y-1">{menu.map(([name,Icon])=><button key={name} type="button" onClick={()=>selectPage(name)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${activePage===name?'bg-white text-ink shadow-lg shadow-black/20':'text-white/65 hover:bg-white/10 hover:text-white'} ${small?'justify-center':''}`} title={name} aria-current={activePage===name?'page':undefined}><Icon size={18}/>{!small&&name}</button>)}</nav><p className={`mt-auto rounded-2xl bg-white/10 p-3 text-xs leading-5 text-white/60 ${small?'hidden':''}`}>Your community has grown <b className="text-mint">18.4%</b> this month.</p></aside><div className={`min-h-screen transition-[margin] lg:ml-64 ${small?'lg:ml-20':''}`}><header className="relative z-20 flex h-20 items-center justify-between px-5 sm:px-8"><div className="flex items-center gap-3"><button type="button" onClick={()=>setOpen(true)} aria-label="Open menu" className="lg:hidden"><Menu/></button><button type="button" onClick={()=>setSmall(!small)} aria-label="Toggle sidebar" className="hidden rounded-full border bg-white p-2 lg:block">{small?<ChevronRight size={16}/>:<ChevronLeft size={16}/>}</button><div className="relative hidden sm:block"><Search size={15} className="absolute left-3 top-3 text-ink/40"/><input value={search} onChange={event=>setSearch(event.target.value)} className="rounded-full border-0 bg-white py-2.5 pl-9 pr-4 text-xs outline-none ring-1 ring-ink/10 focus:ring-violet" placeholder="Search members or exchanges"/></div></div><div className="flex items-center gap-3"><button type="button" onClick={()=>setNotificationsOpen(current=>!current)} aria-label="Open notifications" aria-expanded={notificationsOpen} className="relative rounded-full bg-white p-2.5 hover:bg-ink hover:text-white"><Bell size={17}/>{unread>0&&<i className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-extrabold text-ink">{unread}</i>}</button><button type="button" onClick={logout} title="Log out" className="rounded-full bg-white p-2.5 hover:bg-ink/5"><LogOut size={17}/></button><Avatar name={adminName}/></div></header><main className="mx-auto max-w-7xl px-5 pb-10 sm:px-8">{renderContent()}</main></div>{notificationsOpen&&<div className="fixed inset-0 z-50 bg-ink/25 p-5 backdrop-blur-[2px]" onClick={()=>setNotificationsOpen(false)}><div className="flex min-h-full items-center justify-center"><div className="w-full max-w-sm rounded-3xl border bg-white p-3 shadow-float" onClick={event=>event.stopPropagation()}><div className="flex items-center justify-between px-2 py-2"><div><p className="font-display text-xl">Notifications</p><p className="text-xs text-ink/50">{unread?`${unread} unread`:'All caught up'}</p></div><button type="button" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)} className="rounded-full p-1 hover:bg-ink/5"><X size={18}/></button></div>{unread>0&&<button type="button" onClick={()=>setNotifications(current=>current.map(item=>({...item,read:true})))} className="mx-2 mb-2 text-xs font-extrabold text-violet">Mark all read</button>}{visibleNotifications.map(item=><button key={item.id} type="button" onClick={()=>setNotifications(current=>current.map(notification=>notification.id===item.id?{...notification,read:true}:notification))} className={`flex w-full gap-3 rounded-2xl p-3 text-left hover:bg-[#f7f5f2] ${item.read?'opacity-55':'bg-violet/5'}`}><i className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.read?'bg-transparent':'bg-violet'}`}/><span className="text-sm font-bold leading-5">{item.text}</span></button>)}</div></div></div>}{memberModal&&<div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-5 backdrop-blur-sm"><form onSubmit={addMember} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-float"><div className="flex items-start justify-between"><div><p className="eyebrow">New community member</p><h2 className="mt-1 font-display text-3xl">Add a member</h2></div><button type="button" onClick={()=>setMemberModal(false)} className="rounded-full p-1 hover:bg-ink/5"><X/></button></div><label className="mt-7 block text-sm font-bold">Full name<input value={memberName} onChange={event=>setMemberName(event.target.value)} className="field mt-2" placeholder="Lahar Patel" autoFocus/></label><label className="mt-5 block text-sm font-bold">Primary skill<input value={memberSkill} onChange={event=>setMemberSkill(event.target.value)} className="field mt-2" placeholder="Product design"/></label><div className="mt-7 flex justify-end gap-3"><Button type="button" onClick={()=>setMemberModal(false)} className="bg-white text-ink ring-1 ring-ink/10 hover:bg-ink/5">Cancel</Button><Button type="submit" className="bg-ink text-white hover:bg-violet">Add member</Button></div></form></div>}{selected&&<div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-float"><div className="flex items-start justify-between"><Avatar name={selected[0]}/><button type="button" onClick={()=>setSelected(null)} className="rounded-full p-1 hover:bg-ink/5"><X/></button></div><h2 className="mt-5 font-display text-3xl">{selected[0]}</h2><p className="mt-1 text-sm text-ink/55">{selected[1]}</p><div className="mt-6 grid grid-cols-2 gap-3 rounded-2xl bg-[#f7f5f2] p-4 text-sm"><div><p className="text-xs text-ink/45">Activity</p><p className="mt-1 font-bold">{selected[2]}</p></div><div><p className="text-xs text-ink/45">Status</p><p className="mt-1"><Status>{selected[3]}</Status></p></div></div><div className="mt-7 flex gap-3"><Button type="button" onClick={()=>{setSelected(null);notify(`Opened ${selected[0]}'s profile.`)}} className="flex-1 bg-ink text-white hover:bg-violet">View profile</Button><Button type="button" onClick={removeSelected} className="bg-coral/20 text-ink hover:bg-coral">Remove</Button></div></div></div>}{toast&&<div role="status" className="fixed bottom-5 right-5 z-[60] rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-white shadow-float"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-mint text-ink"><Check size={13}/></span>{toast}</div>}</div>
 }
+
+function ArrowRightIcon() { return <span aria-hidden="true">Ã¢â€ â€™</span> }
