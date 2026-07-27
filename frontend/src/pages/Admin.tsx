@@ -62,6 +62,7 @@ export default function Admin() {
   const [open, setOpen] = useState(false);
   const [small, setSmall] = useState(false);
   const [adminName, setAdminName] = useState('Admin');
+  const [activePage, setActivePage] = useState('Dashboard');
 
   useEffect(() => {
     const getAdminProfile = async () => {
@@ -119,16 +120,18 @@ export default function Admin() {
           </button>
         </div>
         <nav className="space-y-1">
-          {menu.map(([n, I], i) => (
-            <a
+          {menu.map(([n, I]) => (
+            <button
               key={n}
-              href={'#' + n}
-              className={`navlink ${i === 0 ? 'navlink-active' : ''} ${small ? 'justify-center' : ''}`}
+              type="button"
+              onClick={() => { setActivePage(n); setOpen(false); }}
+              className={`navlink w-full ${activePage === n ? 'navlink-active' : ''} ${small ? 'justify-center' : ''}`}
               title={n}
+              aria-current={activePage === n ? 'page' : undefined}
             >
               <I size={18} />
               {!small && n}
-            </a>
+            </button>
           ))}
         </nav>
         <p className={`mt-auto rounded-2xl bg-white/10 p-3 text-xs leading-5 text-white/60 ${small ? 'hidden' : ''}`}>

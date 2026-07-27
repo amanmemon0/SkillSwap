@@ -16,3 +16,8 @@ export function signIn(email: string, password: string): DemoSession | null {
 }
 export function session(): DemoSession | null { try { return JSON.parse(localStorage.getItem(key) || 'null') } catch { return null } }
 export function signOut() { localStorage.removeItem(key) }
+export function createDemoUser(name: string, email: string): DemoSession {
+  const created = { name, email, role: 'user' as const }
+  localStorage.setItem(key, JSON.stringify(created))
+  return created
+}
