@@ -9,9 +9,34 @@ const generateToken = (id, email) => {
 
 const registerUser = async (req, res, next) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, username, email, password, phone, country, state, city, bio, primarySkill, skillLevel, learningSkills, availability, learningMode } = req.body;
+    const location = [city, state, country].join(', ');
+    const profile = {
+      full_name: name,
+      username: username.toLowerCase(),
+      phone: phone || null,
+      country,
+      state,
+      city,
+      location,
+      bio,
+      primary_skill: primarySkill,
+      skill_level: skillLevel,
+      learning_skills: learningSkills,
+      availability,
+      learning_mode: learningMode,
+    };
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    const { data: existingUser, error: usernameError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', profile.username)
+      .maybeSingle();
+
+    if (usernameError) return next(usernameError);
+    if (existingUser) return res.status(409).json({ message: 'That username is already taken' });
+
+    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: profile } });
 
     if (error || !data.user) {
       return res.status(400).json({ message: error?.message || 'Unable to register user' });
@@ -19,7 +44,7 @@ const registerUser = async (req, res, next) => {
 
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert([{ id: data.user.id, full_name: name }]);
+      .insert([{ id: data.user.id, ...profile }]);
 
     if (profileError) {
       return next(profileError);

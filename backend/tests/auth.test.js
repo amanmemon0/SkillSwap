@@ -4,12 +4,13 @@ const { registerSchema, loginSchema } = require('../utils/authValidation');
 const { validate } = require('../middleware/validate');
 
 test('register schema rejects invalid values', () => {
-  const result = registerSchema.safeParse({ name: 'A', email: 'not-an-email', password: '123' });
+  const result = registerSchema.safeParse({ name: 'A', username: '!', email: 'not-an-email', password: '123' });
 
   assert.equal(result.success, false);
   assert.ok(result.error.issues.some((issue) => issue.path[0] === 'name'));
   assert.ok(result.error.issues.some((issue) => issue.path[0] === 'email'));
   assert.ok(result.error.issues.some((issue) => issue.path[0] === 'password'));
+  assert.ok(result.error.issues.some((issue) => issue.path[0] === 'username'));
 });
 
 test('login schema accepts valid payload', () => {

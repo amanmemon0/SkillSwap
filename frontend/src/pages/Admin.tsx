@@ -1,41 +1,972 @@
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { Area, AreaChart, Bar, BarChart, ResponsiveContainer, Tooltip, XAxis } from 'recharts'
-import { BarChart3, Bell, Check, ChevronLeft, ChevronRight, CirclePlus, LayoutDashboard, LogOut, Menu, MoreHorizontal, Search, Settings, Shapes, SlidersHorizontal, Users, Waypoints, X } from 'lucide-react'
-import { growth, metrics, people, requests } from '../data/mock'
-import { Avatar, Button, Status } from '../components/ui/Primitives'
-import { supabase } from '../auth/supabaseClient'
+import { useEffect, useMemo, useState } from "react";
+import {
+  Ban,
+  Check,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  Eye,
+  FileSpreadsheet,
+  Filter,
+  Mail,
+  Menu,
+  MoreHorizontal,
+  Plus,
+  Search,
+  ShieldAlert,
+  Trash2,
+  UserCheck,
+  Users,
+  X,
+} from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { Avatar, Button } from "../components/ui/Primitives";
+import { supabase } from "../auth/supabaseClient";
 
-type Row = [string, string, string, string]
-type Section = 'Dashboard' | 'Members' | 'Skills' | 'Exchanges' | 'Insights' | 'Settings'
-const menu: Array<[Section, typeof LayoutDashboard]> = [['Dashboard', LayoutDashboard], ['Members', Users], ['Skills', Shapes], ['Exchanges', Waypoints], ['Insights', BarChart3], ['Settings', Settings]]
-const notificationsSeed = [{ id: 1, text: '7 profiles are waiting for review.', read: false }, { id: 2, text: 'A new admin joined your workspace.', read: false }, { id: 3, text: 'Weekly community report is ready.', read: true }]
-const skills = [{ name: 'Product & design', count: 624, color: 'bg-violet' }, { name: 'Technology', count: 508, color: 'bg-cyan-500' }, { name: 'Languages', count: 412, color: 'bg-coral' }, { name: 'Creative arts', count: 368, color: 'bg-emerald-500' }]
-
-function PageTitle({ label, title, copy, action }: { label: string; title: string; copy: string; action?: ReactNode }) { return <div className="mb-8 flex flex-wrap items-end justify-between gap-4"><div><p className="eyebrow">Admin workspace / {label}</p><h1 className="mt-2 font-display text-4xl sm:text-5xl">{title}</h1><p className="mt-2 text-sm text-ink/55">{copy}</p></div>{action}</div> }
-
-function DataList({ title, rows, onSelect }: { title: string; rows: Row[]; onSelect: (row: Row) => void }) { return <section className="overflow-hidden rounded-3xl border bg-white"><div className="flex items-center justify-between p-5"><h3 className="font-display text-xl">{title}</h3><span className="rounded-full bg-[#f7f5f2] px-2.5 py-1 text-xs font-bold text-ink/50">{rows.length} total</span></div><div className="divide-y">{rows.length ? rows.map(row=><div className="flex items-center gap-3 px-5 py-3.5 transition hover:bg-[#f7f5f2]" key={row[0]}><Avatar name={row[0]}/><div className="min-w-0 flex-1"><p className="truncate text-sm font-extrabold">{row[0]}</p><p className="truncate text-xs text-ink/55">{row[1]}</p></div><div className="hidden text-right text-xs text-ink/40 sm:block">{row[2]}</div><Status>{row[3]}</Status><button type="button" onClick={()=>onSelect(row)} aria-label={`Open ${row[0]}`} className="rounded-full p-1.5 text-ink/35 hover:bg-white hover:text-violet"><MoreHorizontal size={18}/></button></div>) : <p className="p-10 text-center text-sm text-ink/45">No matching records found.</p>}</div></section> }
-
-function DashboardView({ peopleRows, requestRows, onSelect, onMetric }: { peopleRows: Row[]; requestRows: Row[]; onSelect: (row: Row) => void; onMetric: (message: string) => void }) { return <><PageTitle label="Dashboard" title="The community is humming." copy="A living snapshot of your SkillSwap community."/><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{metrics.map(([label, value, note], index)=><button key={label} type="button" onClick={()=>onMetric(`${label}: ${value} Ã¢â‚¬â€ ${note}`)} className={`relative overflow-hidden rounded-3xl p-5 text-left transition hover:-translate-y-1 hover:shadow-float ${index===0?'bg-violet text-white':index===2?'bg-mint':'bg-white'}`}><p className={`text-xs font-bold ${index===0?'text-white/60':'text-ink/45'}`}>{label}</p><p className="mt-7 text-3xl font-extrabold tracking-tight">{value}</p><p className={`mt-2 text-xs ${index===0?'text-mint':'text-ink/55'}`}>{note}</p><span className="absolute -right-3 -top-5 font-display text-8xl opacity-10">0{index+1}</span></button>)}</section><section className="mt-5 grid gap-5 xl:grid-cols-[1.4fr_.6fr]"><article className="rounded-3xl bg-ink p-6 text-white"><div className="flex items-start justify-between"><div><p className="eyebrow text-mint">Community growth</p><h2 className="mt-2 font-display text-2xl">A good kind of momentum.</h2></div><span className="rounded-full bg-white/10 px-3 py-1 text-xs text-mint">+18.4%</span></div><div className="mt-8 h-52"><ResponsiveContainer><AreaChart data={growth}><defs><linearGradient id="area" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#bdf4d1" stopOpacity=".45"/><stop offset="1" stopColor="#bdf4d1" stopOpacity="0"/></linearGradient></defs><XAxis dataKey="m" tickLine={false} axisLine={false} tick={{ fill:'#fff',fillOpacity:.45,fontSize:11 }}/><Tooltip/><Area type="monotone" dataKey="v" stroke="#bdf4d1" strokeWidth={3} fill="url(#area)"/></AreaChart></ResponsiveContainer></div></article><article className="rounded-3xl bg-coral p-6"><p className="eyebrow text-ink/70">The pulse</p><p className="mt-6 font-display text-4xl leading-tight">42 new conversations started today.</p><p className="mt-7 border-t border-ink/15 pt-4 text-sm text-ink/65">Peak activity lands around 7:30pm Ã¢â‚¬â€ a perfect moment to encourage new matches.</p></article></section><section className="mt-5 grid gap-5 xl:grid-cols-2"><DataList title="New faces" rows={peopleRows.slice(0,3)} onSelect={onSelect}/><DataList title="Exchange requests" rows={requestRows.slice(0,3)} onSelect={onSelect}/></section></> }
+type Status = "Active" | "Pending" | "Suspended" | "Banned";
+type Role = "User" | "Admin";
+type User = {
+  id: number;
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  city: string;
+  bio: string;
+  teachSkills: string[];
+  learnSkills: string[];
+  skillLevel: string;
+  learningMode: string;
+  availability: string;
+  role: Role;
+  status: Status;
+  rating: number;
+  totalReviews: number;
+  completedSwaps: number;
+  pendingSwaps: number;
+  cancelledSwaps: number;
+  reports: number;
+  joinedAt: string;
+  lastLogin: string;
+};
+const seed: User[] = [
+  {
+    id: 1,
+    fullName: "John Doe",
+    username: "johndoe",
+    email: "john@example.com",
+    phone: "+91 9876543210",
+    city: "Ahmedabad",
+    bio: "Passionate web developer and mentor.",
+    teachSkills: ["React", "Node.js"],
+    learnSkills: ["UI/UX", "Public Speaking"],
+    skillLevel: "Advanced",
+    learningMode: "Online",
+    availability: "Weekends",
+    role: "User",
+    status: "Active",
+    rating: 4.8,
+    totalReviews: 42,
+    completedSwaps: 18,
+    pendingSwaps: 2,
+    cancelledSwaps: 1,
+    reports: 0,
+    joinedAt: "2026-06-12",
+    lastLogin: "2026-07-28",
+  },
+  {
+    id: 2,
+    fullName: "Aisha Patel",
+    username: "aisha.designs",
+    email: "aisha@skillswap.city",
+    phone: "+91 98250 11342",
+    city: "Ahmedabad",
+    bio: "Product designer who loves making digital products friendlier.",
+    teachSkills: ["Product Design", "Figma"],
+    learnSkills: ["Spanish", "Photography"],
+    skillLevel: "Expert",
+    learningMode: "Both",
+    availability: "Evenings, Weekends",
+    role: "User",
+    status: "Active",
+    rating: 4.9,
+    totalReviews: 31,
+    completedSwaps: 22,
+    pendingSwaps: 1,
+    cancelledSwaps: 0,
+    reports: 0,
+    joinedAt: "2026-07-20",
+    lastLogin: "2026-07-29",
+  },
+  {
+    id: 3,
+    fullName: "Noah Williams",
+    username: "noahteaches",
+    email: "noah@example.com",
+    phone: "+91 99872 54111",
+    city: "Mumbai",
+    bio: "Language lover and patient teacher.",
+    teachSkills: ["Japanese"],
+    learnSkills: ["React", "Cooking"],
+    skillLevel: "Advanced",
+    learningMode: "Offline",
+    availability: "Weekdays",
+    role: "User",
+    status: "Pending",
+    rating: 4.5,
+    totalReviews: 12,
+    completedSwaps: 8,
+    pendingSwaps: 3,
+    cancelledSwaps: 1,
+    reports: 0,
+    joinedAt: "2026-07-22",
+    lastLogin: "2026-07-26",
+  },
+  {
+    id: 4,
+    fullName: "Sofia Chen",
+    username: "sofiaframes",
+    email: "sofia@example.com",
+    phone: "+91 98111 82645",
+    city: "Delhi",
+    bio: "Portrait photographer, visual storyteller, lifelong learner.",
+    teachSkills: ["Photography", "Lightroom"],
+    learnSkills: ["Public Speaking"],
+    skillLevel: "Advanced",
+    learningMode: "Both",
+    availability: "Weekends",
+    role: "User",
+    status: "Suspended",
+    rating: 4.3,
+    totalReviews: 18,
+    completedSwaps: 9,
+    pendingSwaps: 0,
+    cancelledSwaps: 2,
+    reports: 2,
+    joinedAt: "2026-07-05",
+    lastLogin: "2026-07-19",
+  },
+  {
+    id: 5,
+    fullName: "Arjun Rao",
+    username: "arjun.codes",
+    email: "arjun@skillswap.city",
+    phone: "+91 97022 74311",
+    city: "Pune",
+    bio: "Engineering student sharing practical programming skills.",
+    teachSkills: ["Python", "Web Development"],
+    learnSkills: ["Guitar", "UI/UX"],
+    skillLevel: "Intermediate",
+    learningMode: "Online",
+    availability: "Evenings",
+    role: "User",
+    status: "Active",
+    rating: 4.7,
+    totalReviews: 25,
+    completedSwaps: 15,
+    pendingSwaps: 1,
+    cancelledSwaps: 0,
+    reports: 0,
+    joinedAt: "2026-06-28",
+    lastLogin: "2026-07-29",
+  },
+  {
+    id: 6,
+    fullName: "Olivia Bennett",
+    username: "olivia.admin",
+    email: "admin@skillswap.city",
+    phone: "+91 99900 11552",
+    city: "Mumbai",
+    bio: "Keeping the SkillSwap community welcoming and useful.",
+    teachSkills: ["Community Building"],
+    learnSkills: ["Pottery"],
+    skillLevel: "Expert",
+    learningMode: "Both",
+    availability: "Weekdays",
+    role: "Admin",
+    status: "Active",
+    rating: 5,
+    totalReviews: 48,
+    completedSwaps: 28,
+    pendingSwaps: 0,
+    cancelledSwaps: 0,
+    reports: 0,
+    joinedAt: "2026-05-04",
+    lastLogin: "2026-07-29",
+  },
+  {
+    id: 7,
+    fullName: "Marcus Lee",
+    username: "marcusl",
+    email: "marcus@example.com",
+    phone: "+91 98335 20010",
+    city: "Bengaluru",
+    bio: "Frontend developer and open source contributor.",
+    teachSkills: ["React", "TypeScript"],
+    learnSkills: ["UI/UX"],
+    skillLevel: "Advanced",
+    learningMode: "Online",
+    availability: "Mornings",
+    role: "User",
+    status: "Banned",
+    rating: 3.4,
+    totalReviews: 5,
+    completedSwaps: 2,
+    pendingSwaps: 0,
+    cancelledSwaps: 4,
+    reports: 4,
+    joinedAt: "2026-06-02",
+    lastLogin: "2026-07-11",
+  },
+];
+const statuses: Status[] = ["Active", "Pending", "Suspended", "Banned"];
+const badge: Record<Status, string> = {
+  Active: "bg-emerald-100 text-emerald-800",
+  Pending: "bg-amber-100 text-amber-800",
+  Suspended: "bg-orange-100 text-orange-800",
+  Banned: "bg-rose-100 text-rose-800",
+};
+const formatDate = (date: string) =>
+  new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(date));
 
 export default function Admin() {
-  const nav = useNavigate(); const [open, setOpen] = useState(false); const [small, setSmall] = useState(false); const [adminName, setAdminName] = useState('Admin'); const [activePage, setActivePage] = useState<Section>('Dashboard'); const [search, setSearch] = useState(''); const [notificationsOpen, setNotificationsOpen] = useState(false); const [notifications, setNotifications] = useState(notificationsSeed); const [peopleRows, setPeopleRows] = useState<Row[]>(people as Row[]); const [requestRows, setRequestRows] = useState<Row[]>(requests as Row[]); const [selected, setSelected] = useState<Row | null>(null); const [memberModal, setMemberModal] = useState(false); const [memberName, setMemberName] = useState(''); const [memberSkill, setMemberSkill] = useState(''); const [toast, setToast] = useState(''); const [settings, setSettings] = useState<{ review: boolean; email: boolean; weekly: boolean }>(() => { try { return { review: true, email: true, weekly: false, ...JSON.parse(localStorage.getItem('skillswap-admin-settings') || '{}') } } catch { return { review: true, email: true, weekly: false } } })
-  useEffect(() => { const load = async () => { const { data: { session } } = await supabase.auth.getSession(); if (!session?.user) return; const { data } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single(); setAdminName(data?.full_name || session.user.user_metadata?.full_name || 'Admin') }; load() }, [])
-  useEffect(() => { localStorage.setItem('skillswap-admin-settings', JSON.stringify(settings)) }, [settings])
-  const notify = (message: string) => { setToast(message); window.setTimeout(()=>setToast(''),2600) }
-  const logout = async () => { await supabase.auth.signOut(); nav('/login') }
-  const query = search.toLowerCase(); const filteredPeople = useMemo(()=>peopleRows.filter(row=>row.join(' ').toLowerCase().includes(query)),[peopleRows,query]); const filteredRequests = useMemo(()=>requestRows.filter(row=>row.join(' ').toLowerCase().includes(query)),[requestRows,query]); const visibleNotifications = settings.review ? notifications : notifications.filter(item=>!item.text.includes('profiles')); const unread = visibleNotifications.filter(item=>!item.read).length
-  const addMember = (event: FormEvent) => { event.preventDefault(); if (!memberName.trim() || !memberSkill.trim()) return notify('Enter a name and primary skill first.'); const name=memberName.trim(); setPeopleRows(current=>[[name,memberSkill.trim(),'Just now','Active'],...current]); setMemberName(''); setMemberSkill(''); setMemberModal(false); notify(`${name} was added to the community.`) }
-  const removeSelected = () => { if (!selected) return; const name=selected[0]; setPeopleRows(current=>current.filter(row=>row[0]!==name)); setRequestRows(current=>current.filter(row=>row[0]!==name)); setSelected(null); notify(`${name} was removed from this local list.`) }
-  const selectPage = (page: Section) => { setActivePage(page); setOpen(false); setSearch('') }
-  const renderContent = () => {
-    if (activePage==='Dashboard') return <DashboardView peopleRows={filteredPeople} requestRows={filteredRequests} onSelect={setSelected} onMetric={notify}/>
-    if (activePage==='Members') return <><PageTitle label="Members" title="Your community, at a glance." copy="Search, review, and manage every member in the network." action={<Button onClick={()=>setMemberModal(true)} className="bg-ink text-white hover:bg-violet"><CirclePlus size={17}/> Add a member</Button>}/><DataList title="All members" rows={filteredPeople} onSelect={setSelected}/></>
-    if (activePage==='Skills') return <><PageTitle label="Skills" title="What the community is sharing." copy="Monitor the subjects that bring people together."/><section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{skills.map(skill=><button type="button" key={skill.name} onClick={()=>notify(`${skill.name} has ${skill.count} active skills.`)} className="rounded-3xl bg-white p-6 text-left transition hover:-translate-y-1 hover:shadow-float"><i className={`block h-3 w-3 rounded-full ${skill.color}`}/><p className="mt-8 font-display text-3xl">{skill.count}</p><p className="mt-1 text-sm font-bold text-ink/60">{skill.name}</p></button>)}</section><div className="mt-5 rounded-3xl border bg-white p-6"><p className="eyebrow">Moderation queue</p><h2 className="mt-2 font-display text-3xl">18 new skills need a quick review.</h2><Button onClick={()=>notify('Skill review queue opened.')} className="mt-6 bg-ink text-white hover:bg-violet">Review skills <ArrowRightIcon/></Button></div></>
-    if (activePage==='Exchanges') return <><PageTitle label="Exchanges" title="Every good swap starts here." copy="Keep an eye on active, pending, and completed member exchanges."/><DataList title="All exchange requests" rows={filteredRequests} onSelect={setSelected}/></>
-    if (activePage==='Insights') return <><PageTitle label="Insights" title="Understand the momentum." copy="See what is growing and where members need more support."/><section className="grid gap-5 lg:grid-cols-[1.35fr_.65fr]"><article className="rounded-3xl bg-white p-6"><p className="eyebrow">Member activity</p><h2 className="mt-2 font-display text-3xl">Monthly connection rate</h2><div className="mt-8 h-72"><ResponsiveContainer><BarChart data={growth}><XAxis dataKey="m" axisLine={false} tickLine={false}/><Tooltip/><Bar dataKey="v" radius={[8,8,0,0]} fill="#6558e8"/></BarChart></ResponsiveContainer></div></article><article className="rounded-3xl bg-mint p-6"><p className="eyebrow text-ink/60">Quick read</p><p className="mt-7 font-display text-5xl">68%</p><p className="mt-2 text-sm leading-6 text-ink/65">of active members return within seven days of their first completed exchange.</p><button type="button" onClick={()=>notify('Weekly insight report generated.')} className="mt-10 text-sm font-extrabold underline underline-offset-4">Generate report</button></article></section></>
-    return <><PageTitle label="Settings" title="Make the workspace yours." copy="These preferences are stored in this browser and update the dashboard immediately."/><section className="max-w-2xl rounded-3xl bg-white p-6 sm:p-8"><div className="flex items-center gap-3"><span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet/10 text-violet"><SlidersHorizontal size={20}/></span><div><h2 className="font-display text-3xl">Admin preferences</h2><p className="text-sm text-ink/55">Your changes save automatically.</p></div></div><div className="mt-8 divide-y">{[['review','Profile review alerts','Shows or hides profile-review notifications in the bell menu.'],['email','Email activity summaries','Records whether you want activity summaries when email delivery is connected.'],['weekly','Weekly insight digest','Turns on the weekly report preference for the Insights workspace.']].map(([key,label,detail])=><label key={key} className="flex cursor-pointer items-center justify-between gap-5 py-5"><span><span className="block text-sm font-bold">{label}</span><span className="mt-1 block max-w-md text-xs leading-5 text-ink/50">{detail}</span></span><input type="checkbox" checked={settings[key as keyof typeof settings]} onChange={()=>setSettings(current=>({...current,[key]:!current[key as keyof typeof current]}))} className="h-5 w-5 shrink-0 accent-violet"/></label>)}</div><div className="mt-7 rounded-2xl bg-[#f7f5f2] p-4"><p className="text-xs font-extrabold uppercase tracking-wide text-ink/45">Live dashboard effect</p><p className="mt-2 text-sm font-bold">Review alerts are <span className={settings.review?'text-emerald-700':'text-coral'}>{settings.review?'visible in Notifications':'hidden from Notifications'}</span>.</p><p className="mt-1 text-sm text-ink/60">Weekly digest: <b>{settings.weekly?'enabled':'paused'}</b> Â· Email summaries: <b>{settings.email?'enabled':'paused'}</b></p></div><Button onClick={()=>notify('Preferences are saved in this browser.')} className="mt-7 bg-ink text-white hover:bg-violet">Save preferences</Button></section></>  }
-  return <div className="min-h-screen bg-[#f7f5f2]"><aside className={`fixed inset-y-0 z-30 flex w-64 flex-col bg-ink p-4 text-white transition-transform lg:translate-x-0 ${open?'translate-x-0':'-translate-x-full'} ${small?'lg:w-20':''}`}><div className="mb-12 flex items-center justify-between px-2"><span className="flex items-center gap-2 text-sm font-extrabold"><i className="grid h-8 w-8 place-items-center rounded-full bg-mint font-display text-lg text-ink">S</i>{!small&&'SkillSwap'}</span><button type="button" aria-label="Close menu" className="lg:hidden" onClick={()=>setOpen(false)}><X/></button></div><nav className="space-y-1">{menu.map(([name,Icon])=><button key={name} type="button" onClick={()=>selectPage(name)} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition ${activePage===name?'bg-white text-ink shadow-lg shadow-black/20':'text-white/65 hover:bg-white/10 hover:text-white'} ${small?'justify-center':''}`} title={name} aria-current={activePage===name?'page':undefined}><Icon size={18}/>{!small&&name}</button>)}</nav><p className={`mt-auto rounded-2xl bg-white/10 p-3 text-xs leading-5 text-white/60 ${small?'hidden':''}`}>Your community has grown <b className="text-mint">18.4%</b> this month.</p></aside><div className={`min-h-screen transition-[margin] lg:ml-64 ${small?'lg:ml-20':''}`}><header className="relative z-20 flex h-20 items-center justify-between px-5 sm:px-8"><div className="flex items-center gap-3"><button type="button" onClick={()=>setOpen(true)} aria-label="Open menu" className="lg:hidden"><Menu/></button><button type="button" onClick={()=>setSmall(!small)} aria-label="Toggle sidebar" className="hidden rounded-full border bg-white p-2 lg:block">{small?<ChevronRight size={16}/>:<ChevronLeft size={16}/>}</button><div className="relative hidden sm:block"><Search size={15} className="absolute left-3 top-3 text-ink/40"/><input value={search} onChange={event=>setSearch(event.target.value)} className="rounded-full border-0 bg-white py-2.5 pl-9 pr-4 text-xs outline-none ring-1 ring-ink/10 focus:ring-violet" placeholder="Search members or exchanges"/></div></div><div className="flex items-center gap-3"><button type="button" onClick={()=>setNotificationsOpen(current=>!current)} aria-label="Open notifications" aria-expanded={notificationsOpen} className="relative rounded-full bg-white p-2.5 hover:bg-ink hover:text-white"><Bell size={17}/>{unread>0&&<i className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-coral px-1 text-[9px] font-extrabold text-ink">{unread}</i>}</button><button type="button" onClick={logout} title="Log out" className="rounded-full bg-white p-2.5 hover:bg-ink/5"><LogOut size={17}/></button><Avatar name={adminName}/></div></header><main className="mx-auto max-w-7xl px-5 pb-10 sm:px-8">{renderContent()}</main></div>{notificationsOpen&&<div className="fixed inset-0 z-50 bg-ink/25 p-5 backdrop-blur-[2px]" onClick={()=>setNotificationsOpen(false)}><div className="flex min-h-full items-center justify-center"><div className="w-full max-w-sm rounded-3xl border bg-white p-3 shadow-float" onClick={event=>event.stopPropagation()}><div className="flex items-center justify-between px-2 py-2"><div><p className="font-display text-xl">Notifications</p><p className="text-xs text-ink/50">{unread?`${unread} unread`:'All caught up'}</p></div><button type="button" aria-label="Close notifications" onClick={()=>setNotificationsOpen(false)} className="rounded-full p-1 hover:bg-ink/5"><X size={18}/></button></div>{unread>0&&<button type="button" onClick={()=>setNotifications(current=>current.map(item=>({...item,read:true})))} className="mx-2 mb-2 text-xs font-extrabold text-violet">Mark all read</button>}{visibleNotifications.map(item=><button key={item.id} type="button" onClick={()=>setNotifications(current=>current.map(notification=>notification.id===item.id?{...notification,read:true}:notification))} className={`flex w-full gap-3 rounded-2xl p-3 text-left hover:bg-[#f7f5f2] ${item.read?'opacity-55':'bg-violet/5'}`}><i className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${item.read?'bg-transparent':'bg-violet'}`}/><span className="text-sm font-bold leading-5">{item.text}</span></button>)}</div></div></div>}{memberModal&&<div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-5 backdrop-blur-sm"><form onSubmit={addMember} className="w-full max-w-md rounded-3xl bg-white p-6 shadow-float"><div className="flex items-start justify-between"><div><p className="eyebrow">New community member</p><h2 className="mt-1 font-display text-3xl">Add a member</h2></div><button type="button" onClick={()=>setMemberModal(false)} className="rounded-full p-1 hover:bg-ink/5"><X/></button></div><label className="mt-7 block text-sm font-bold">Full name<input value={memberName} onChange={event=>setMemberName(event.target.value)} className="field mt-2" placeholder="Lahar Patel" autoFocus/></label><label className="mt-5 block text-sm font-bold">Primary skill<input value={memberSkill} onChange={event=>setMemberSkill(event.target.value)} className="field mt-2" placeholder="Product design"/></label><div className="mt-7 flex justify-end gap-3"><Button type="button" onClick={()=>setMemberModal(false)} className="bg-white text-ink ring-1 ring-ink/10 hover:bg-ink/5">Cancel</Button><Button type="submit" className="bg-ink text-white hover:bg-violet">Add member</Button></div></form></div>}{selected&&<div className="fixed inset-0 z-50 grid place-items-center bg-ink/35 p-5 backdrop-blur-sm"><div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-float"><div className="flex items-start justify-between"><Avatar name={selected[0]}/><button type="button" onClick={()=>setSelected(null)} className="rounded-full p-1 hover:bg-ink/5"><X/></button></div><h2 className="mt-5 font-display text-3xl">{selected[0]}</h2><p className="mt-1 text-sm text-ink/55">{selected[1]}</p><div className="mt-6 grid grid-cols-2 gap-3 rounded-2xl bg-[#f7f5f2] p-4 text-sm"><div><p className="text-xs text-ink/45">Activity</p><p className="mt-1 font-bold">{selected[2]}</p></div><div><p className="text-xs text-ink/45">Status</p><p className="mt-1"><Status>{selected[3]}</Status></p></div></div><div className="mt-7 flex gap-3"><Button type="button" onClick={()=>{setSelected(null);notify(`Opened ${selected[0]}'s profile.`)}} className="flex-1 bg-ink text-white hover:bg-violet">View profile</Button><Button type="button" onClick={removeSelected} className="bg-coral/20 text-ink hover:bg-coral">Remove</Button></div></div></div>}{toast&&<div role="status" className="fixed bottom-5 right-5 z-[60] rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-white shadow-float"><span className="mr-2 inline-grid h-5 w-5 place-items-center rounded-full bg-mint text-ink"><Check size={13}/></span>{toast}</div>}</div>
+  const nav = useNavigate();
+  const [users, setUsers] = useState<User[]>(() => {
+    try {
+      const imported = JSON.parse(localStorage.getItem("skillswap-bulk-users") || "[]") as User[];
+      return [...imported, ...seed];
+    } catch {
+      return seed;
+    }
+  });
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("All");
+  const [role, setRole] = useState("All");
+  const [city, setCity] = useState("All");
+  const [sort, setSort] = useState("Newest");
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [drawer, setDrawer] = useState<User | null>(null);
+  const [confirm, setConfirm] = useState<{
+    action: string;
+    users: number[];
+  } | null>(null);
+  const [notice, setNotice] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setLoading(false), 450);
+    return () => window.clearTimeout(timer);
+  }, []);
+  const cities = useMemo(
+    () => Array.from(new Set(users.map((user) => user.city))).sort(),
+    [users],
+  );
+  const filtered = useMemo(
+    () =>
+      users
+        .filter((user) => {
+          const searchable =
+            `${user.fullName} ${user.username} ${user.email}`.toLowerCase();
+          return (
+            searchable.includes(query.toLowerCase()) &&
+            (status === "All" || user.status === status) &&
+            (role === "All" || user.role === role) &&
+            (city === "All" || user.city === city)
+          );
+        })
+        .sort((a, b) =>
+          sort === "Oldest"
+            ? a.joinedAt.localeCompare(b.joinedAt)
+            : sort === "Highest Rated"
+              ? b.rating - a.rating
+              : sort === "Most Swaps"
+                ? b.completedSwaps - a.completedSwaps
+                : sort === "Most Reports"
+                  ? b.reports - a.reports
+                  : b.joinedAt.localeCompare(a.joinedAt),
+        ),
+    [users, query, status, role, city, sort],
+  );
+  const perPage = 5;
+  const pages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const visible = filtered.slice((page - 1) * perPage, page * perPage);
+  useEffect(() => setPage(1), [query, status, role, city, sort]);
+  const notify = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2500);
+  };
+  const applyAction = (action: string, ids: number[]) => {
+    if (action === "Delete")
+      setUsers((current) => current.filter((user) => !ids.includes(user.id)));
+    else
+      setUsers((current) =>
+        current.map((user) =>
+          ids.includes(user.id)
+            ? {
+                ...user,
+                status:
+                  action === "Activate"
+                    ? "Active"
+                    : action === "Suspend"
+                      ? "Suspended"
+                      : "Banned",
+              }
+            : user,
+        ),
+      );
+    setSelected([]);
+    setDrawer(null);
+    setConfirm(null);
+    notify(`${ids.length} user${ids.length === 1 ? "" : "s"} updated.`);
+  };
+  const toggle = (id: number) =>
+    setSelected((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  return (
+    <div className="min-h-screen bg-[#f7f5f2] text-ink">
+      <aside
+        className={`fixed inset-y-0 z-40 w-64 bg-ink p-5 text-white transition-transform lg:translate-x-0 ${menuOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-lg font-extrabold">
+            <i className="grid h-9 w-9 place-items-center rounded-xl bg-mint text-ink">
+              S
+            </i>
+            SkillSwap
+          </span>
+          <button className="lg:hidden" onClick={() => setMenuOpen(false)}>
+            <X />
+          </button>
+        </div>
+        <p className="mt-12 px-3 text-[10px] font-bold uppercase tracking-[.2em] text-white/40">
+          Workspace
+        </p>
+        <button className="mt-3 flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left text-sm font-bold text-ink">
+          <Users size={18} />
+          User Management
+        </button>
+        <button
+          onClick={async () => {
+            await supabase.auth.signOut();
+            nav("/login");
+          }}
+          className="mt-auto flex absolute bottom-6 items-center gap-3 px-3 text-sm font-bold text-white/60 hover:text-white"
+        >
+          Sign out
+        </button>
+      </aside>
+      <main className="min-h-screen lg:ml-64">
+        <header className="flex h-20 items-center justify-between px-5 sm:px-8">
+          <button
+            className="rounded-xl bg-white p-2 lg:hidden"
+            onClick={() => setMenuOpen(true)}
+          >
+            <Menu size={20} />
+          </button>
+          <div className="hidden lg:block" />
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm font-bold text-ink/55 sm:block">
+              Admin workspace
+            </span>
+            <Avatar name="Olivia Bennett" />
+          </div>
+        </header>
+        <section className="mx-auto max-w-[1600px] px-5 pb-10 sm:px-8">
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="eyebrow">Admin workspace / members</p>
+              <h1 className="mt-2 font-display text-4xl sm:text-5xl">
+                User Management
+              </h1>
+              <p className="mt-2 text-sm text-ink/55">
+                Review, support, and moderate the people who make SkillSwap
+                work.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Link to="/admin/import">
+                <Button className="bg-white text-ink ring-1 ring-ink/10 hover:bg-mint">
+                  <FileSpreadsheet size={16} />
+                  Import users
+                </Button>
+              </Link>
+              <Button
+                onClick={() => notify("Admin invitation flow opened.")}
+                className="bg-ink text-white hover:bg-violet"
+              >
+                <Plus size={16} />
+                Add admin
+              </Button>
+            </div>
+          </div>
+          <div className="rounded-3xl border bg-white p-4 shadow-sm">
+            <div className="grid gap-3 xl:grid-cols-[1fr_repeat(4,auto)]">
+              <label className="relative">
+                <Search
+                  size={16}
+                  className="absolute left-3 top-3 text-ink/40"
+                />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  className="w-full rounded-xl bg-[#f7f5f2] py-2.5 pl-9 pr-3 text-sm outline-none ring-1 ring-transparent focus:ring-violet"
+                  placeholder="Search name, username, or email"
+                />
+              </label>
+              <Select
+                value={status}
+                onChange={setStatus}
+                options={["All", ...statuses]}
+                label="Status"
+              />
+              <Select
+                value={role}
+                onChange={setRole}
+                options={["All", "User", "Admin"]}
+                label="Role"
+              />
+              <Select
+                value={city}
+                onChange={setCity}
+                options={["All", ...cities]}
+                label="City"
+              />
+              <Select
+                value={sort}
+                onChange={setSort}
+                options={[
+                  "Newest",
+                  "Oldest",
+                  "Highest Rated",
+                  "Most Swaps",
+                  "Most Reports",
+                ]}
+                label="Sort"
+              />
+            </div>
+          </div>
+          {selected.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl bg-violet px-4 py-3 text-sm text-white">
+              <span className="font-bold">{selected.length} selected</span>
+              <button
+                onClick={() => applyAction("Activate", selected)}
+                className="rounded-lg bg-white/15 px-3 py-1.5 font-bold hover:bg-white/25"
+              >
+                Activate
+              </button>
+              <button
+                onClick={() => applyAction("Suspend", selected)}
+                className="rounded-lg bg-white/15 px-3 py-1.5 font-bold hover:bg-white/25"
+              >
+                Suspend
+              </button>
+              <button
+                onClick={() =>
+                  notify("Notification composer opened for selected users.")
+                }
+                className="rounded-lg bg-white/15 px-3 py-1.5 font-bold hover:bg-white/25"
+              >
+                Send notification
+              </button>
+              <button
+                onClick={() =>
+                  setConfirm({ action: "Delete", users: selected })
+                }
+                className="rounded-lg bg-rose-500 px-3 py-1.5 font-bold"
+              >
+                Delete
+              </button>
+              <button onClick={() => setSelected([])} className="ml-auto">
+                <X size={17} />
+              </button>
+            </div>
+          )}
+          <section className="mt-5 overflow-hidden rounded-3xl border bg-white shadow-sm">
+            <div className="flex items-center justify-between p-5">
+              <div>
+                <h2 className="font-display text-2xl">Registered users</h2>
+                <p className="mt-1 text-xs text-ink/50">
+                  {filtered.length} matching users
+                </p>
+              </div>
+              <span className="hidden items-center gap-2 text-xs font-bold text-ink/45 sm:flex">
+                <Filter size={14} />
+                Filters update instantly
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1120px] text-left">
+                <thead className="border-y bg-[#fcfbfa] text-[10px] uppercase tracking-wider text-ink/45">
+                  <tr>
+                    <th className="p-4">
+                      <input
+                        aria-label="Select all users"
+                        type="checkbox"
+                        checked={
+                          visible.length > 0 &&
+                          visible.every((user) => selected.includes(user.id))
+                        }
+                        onChange={(event) =>
+                          setSelected(
+                            event.target.checked
+                              ? Array.from(
+                                  new Set([
+                                    ...selected,
+                                    ...visible.map((user) => user.id),
+                                  ]),
+                                )
+                              : selected.filter(
+                                  (id) =>
+                                    !visible.some((user) => user.id === id),
+                                ),
+                          )
+                        }
+                        className="accent-violet"
+                      />
+                    </th>
+                    {[
+                      "User",
+                      "Email",
+                      "City",
+                      "Skills",
+                      "Role",
+                      "Status",
+                      "Rating",
+                      "Swaps",
+                      "Joined",
+                      "Actions",
+                    ].map((title) => (
+                      <th
+                        key={title}
+                        className="whitespace-nowrap p-4 font-bold"
+                      >
+                        {title}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {loading ? (
+                    Array.from({ length: 5 }).map((_, index) => (
+                      <tr key={index}>
+                        {Array.from({ length: 11 }).map((__, cell) => (
+                          <td key={cell} className="p-4">
+                            <i className="block h-5 animate-pulse rounded bg-ink/5" />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : visible.length ? (
+                    visible.map((user) => (
+                      <tr
+                        key={user.id}
+                        className="group transition hover:bg-violet/[.025]"
+                      >
+                        <td className="p-4">
+                          <input
+                            aria-label={`Select ${user.fullName}`}
+                            type="checkbox"
+                            checked={selected.includes(user.id)}
+                            onChange={() => toggle(user.id)}
+                            className="accent-violet"
+                          />
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={user.fullName} />
+                            <div>
+                              <p className="whitespace-nowrap text-sm font-extrabold">
+                                {user.fullName}
+                              </p>
+                              <p className="text-xs text-ink/50">
+                                @{user.username}
+                              </p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm text-ink/60">
+                          {user.email}
+                        </td>
+                        <td className="p-4 text-sm font-medium">{user.city}</td>
+                        <td className="p-4 text-sm">
+                          {user.teachSkills.length + user.learnSkills.length}
+                        </td>
+                        <td className="p-4">
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-bold ${user.role === "Admin" ? "bg-violet/10 text-violet" : "bg-ink/5 text-ink/60"}`}
+                          >
+                            {user.role}
+                          </span>
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={user.status} />
+                        </td>
+                        <td className="p-4 text-sm font-bold">
+                          ★ {user.rating.toFixed(1)}
+                        </td>
+                        <td className="p-4 text-sm">{user.completedSwaps}</td>
+                        <td className="p-4 whitespace-nowrap text-sm text-ink/55">
+                          {formatDate(user.joinedAt)}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex gap-1">
+                            <button
+                              title="View user"
+                              onClick={() => setDrawer(user)}
+                              className="rounded-lg p-2 text-ink/45 hover:bg-violet/10 hover:text-violet"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              title="Edit user"
+                              onClick={() => setDrawer(user)}
+                              className="rounded-lg p-2 text-ink/45 hover:bg-violet/10 hover:text-violet"
+                            >
+                              <Edit3 size={16} />
+                            </button>
+                            <button
+                              title="More actions"
+                              onClick={() =>
+                                setConfirm({
+                                  action:
+                                    user.status === "Active"
+                                      ? "Suspend"
+                                      : "Activate",
+                                  users: [user.id],
+                                })
+                              }
+                              className="rounded-lg p-2 text-ink/45 hover:bg-violet/10 hover:text-violet"
+                            >
+                              <MoreHorizontal size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={11} className="p-16 text-center">
+                        <Users className="mx-auto text-ink/20" size={34} />
+                        <p className="mt-3 font-bold">No users found</p>
+                        <p className="mt-1 text-sm text-ink/50">
+                          Try changing your search or filters.
+                        </p>
+                        <button
+                          onClick={() => {
+                            setQuery("");
+                            setStatus("All");
+                            setRole("All");
+                            setCity("All");
+                          }}
+                          className="mt-4 text-sm font-bold text-violet"
+                        >
+                          Clear filters
+                        </button>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div className="flex items-center justify-between border-t p-4 text-sm">
+              <p className="text-ink/55">
+                Showing {filtered.length ? (page - 1) * perPage + 1 : 0}–
+                {Math.min(page * perPage, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={page === 1}
+                  onClick={() => setPage((current) => current - 1)}
+                  className="rounded-lg border p-2 disabled:opacity-40"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <span className="px-2 text-xs font-bold">
+                  Page {page} of {pages}
+                </span>
+                <button
+                  disabled={page === pages}
+                  onClick={() => setPage((current) => current + 1)}
+                  className="rounded-lg border p-2 disabled:opacity-40"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+          </section>
+        </section>
+      </main>
+      {drawer && (
+        <UserDrawer
+          user={drawer}
+          onClose={() => setDrawer(null)}
+          onAction={(action) => setConfirm({ action, users: [drawer.id] })}
+        />
+      )}{" "}
+      {confirm && (
+        <Confirm
+          action={confirm.action}
+          count={confirm.users.length}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => applyAction(confirm.action, confirm.users)}
+        />
+      )}{" "}
+      {notice && (
+        <div
+          role="status"
+          className="fixed bottom-5 right-5 z-50 rounded-2xl bg-ink px-4 py-3 text-sm font-bold text-white shadow-xl"
+        >
+          <Check className="mr-2 inline text-mint" size={16} />
+          {notice}
+        </div>
+      )}
+    </div>
+  );
 }
-
-function ArrowRightIcon() { return <span aria-hidden="true">Ã¢â€ â€™</span> }
+function Select({
+  value,
+  onChange,
+  options,
+  label,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: string[];
+  label: string;
+}) {
+  return (
+    <label className="relative">
+      <span className="sr-only">{label}</span>
+      <select
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full appearance-none rounded-xl bg-[#f7f5f2] px-3 py-2.5 pr-8 text-sm font-bold text-ink/65 outline-none ring-1 ring-transparent focus:ring-violet"
+      >
+        {options.map((option) => (
+          <option key={option}>{option}</option>
+        ))}
+      </select>
+      <ChevronRight
+        size={14}
+        className="pointer-events-none absolute right-2 top-3 rotate-90 text-ink/40"
+      />
+    </label>
+  );
+}
+function StatusBadge({ status }: { status: Status }) {
+  return (
+    <span
+      className={`rounded-full px-2.5 py-1 text-xs font-bold ${badge[status]}`}
+    >
+      {status}
+    </span>
+  );
+}
+function UserDrawer({
+  user,
+  onClose,
+  onAction,
+}: {
+  user: User;
+  onClose: () => void;
+  onAction: (action: string) => void;
+}) {
+  const stat = [
+    [
+      "Total requests",
+      user.completedSwaps + user.pendingSwaps + user.cancelledSwaps,
+    ],
+    ["Completed", user.completedSwaps],
+    ["Cancelled", user.cancelledSwaps],
+    ["Pending", user.pendingSwaps],
+    ["Average rating", `★ ${user.rating}`],
+    ["Total reviews", user.totalReviews],
+    ["Reports", user.reports],
+  ];
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[1px]"
+      onClick={onClose}
+    >
+      <aside
+        onClick={(event) => event.stopPropagation()}
+        className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto bg-[#f7f5f2] p-5 shadow-2xl sm:p-8"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <Avatar name={user.fullName} />
+            <div>
+              <h2 className="font-display text-3xl">{user.fullName}</h2>
+              <p className="text-sm text-ink/55">
+                @{user.username} · <StatusBadge status={user.status} />
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="rounded-xl bg-white p-2">
+            <X />
+          </button>
+        </div>
+        <section className="mt-8 rounded-3xl bg-white p-5">
+          <p className="eyebrow">Personal information</p>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <Detail label="Email" value={user.email} />
+            <Detail label="Phone" value={user.phone} />
+            <Detail label="City" value={user.city} />
+            <Detail label="Registered" value={formatDate(user.joinedAt)} />
+            <Detail label="Last login" value={formatDate(user.lastLogin)} />
+          </div>
+        </section>
+        <section className="mt-4 rounded-3xl bg-white p-5">
+          <p className="eyebrow">Profile information</p>
+          <p className="mt-3 text-sm leading-6 text-ink/65">{user.bio}</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <Detail label="Teaches" value={user.teachSkills.join(", ")} />
+            <Detail
+              label="Wants to learn"
+              value={user.learnSkills.join(", ")}
+            />
+            <Detail label="Skill level" value={user.skillLevel} />
+            <Detail label="Learning mode" value={user.learningMode} />
+            <Detail label="Availability" value={user.availability} />
+          </div>
+        </section>
+        <section className="mt-4">
+          <p className="eyebrow">Statistics</p>
+          <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {stat.map(([label, value]) => (
+              <div key={label as string} className="rounded-2xl bg-white p-4">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-ink/45">
+                  {label}
+                </p>
+                <p className="mt-2 text-xl font-extrabold">{value}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="mt-4 rounded-3xl bg-white p-5">
+          <p className="eyebrow">Recent activity</p>
+          <ol className="mt-4 space-y-3 border-l border-ink/10 pl-4 text-sm">
+            <li>
+              <b>Registered account</b>
+              <span className="block text-ink/50">
+                {formatDate(user.joinedAt)}
+              </span>
+            </li>
+            <li>
+              <b>Updated their profile</b>
+              <span className="block text-ink/50">
+                Added skills and availability
+              </span>
+            </li>
+            <li>
+              <b>Sent a swap request</b>
+              <span className="block text-ink/50">
+                Recent community activity
+              </span>
+            </li>
+          </ol>
+        </section>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button
+            onClick={() => onAction("Activate")}
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            <UserCheck size={16} />
+            Activate
+          </Button>
+          <Button
+            onClick={() => onAction("Suspend")}
+            className="bg-amber-500 text-ink hover:bg-amber-400"
+          >
+            <ShieldAlert size={16} />
+            Suspend
+          </Button>
+          <Button
+            onClick={() => onAction("Ban")}
+            className="bg-rose-600 text-white hover:bg-rose-700"
+          >
+            <Ban size={16} />
+            Ban
+          </Button>
+          <Button
+            onClick={() => onAction("Delete")}
+            className="bg-white text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
+          >
+            <Trash2 size={16} />
+            Delete
+          </Button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+function Detail({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-bold text-ink/45">{label}</p>
+      <p className="mt-1 text-sm font-bold text-ink/70">{value}</p>
+    </div>
+  );
+}
+function Confirm({
+  action,
+  count,
+  onClose,
+  onConfirm,
+}: {
+  action: string;
+  count: number;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const destructive = action === "Delete" || action === "Ban";
+  return (
+    <div className="fixed inset-0 z-[60] grid place-items-center bg-ink/40 p-5 backdrop-blur-sm">
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl"
+      >
+        <div
+          className={`grid h-11 w-11 place-items-center rounded-2xl ${destructive ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-700"}`}
+        >
+          {destructive ? <Trash2 size={20} /> : <ShieldAlert size={20} />}
+        </div>
+        <h2 className="mt-5 font-display text-3xl">
+          {action} {count} user{count === 1 ? "" : "s"}?
+        </h2>
+        <p className="mt-2 text-sm leading-6 text-ink/60">
+          {action === "Delete"
+            ? "This permanently removes the selected user profiles. This action cannot be undone."
+            : `The selected users will be marked as ${action.toLowerCase()}.`}
+        </p>
+        <div className="mt-7 flex justify-end gap-3">
+          <Button
+            onClick={onClose}
+            className="bg-white text-ink ring-1 ring-ink/10 hover:bg-ink/5"
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={onConfirm}
+            className={
+              destructive
+                ? "bg-rose-600 text-white hover:bg-rose-700"
+                : "bg-ink text-white hover:bg-violet"
+            }
+          >
+            {action}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
