@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
 const supabase = require('../config/db');
 
 const generateToken = (id, email) => {
@@ -28,6 +29,7 @@ const registerUser = async (req, res, next) => {
       role: 'user',
     };
 
+    // Check if username already exists
     const { data: existingUser, error: usernameError } = await supabase
       .from('profiles')
       .select('id')
@@ -37,27 +39,49 @@ const registerUser = async (req, res, next) => {
     if (usernameError) return next(usernameError);
     if (existingUser) return res.status(409).json({ message: 'That username is already taken' });
 
-    const { data, error } = await supabase.auth.signUp({ email, password, options: { data: profile } });
+    // Check if email already exists
+    const { data: existingEmail, error: emailError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
 
-    if (error || !data.user) {
-      return res.status(400).json({ message: error?.message || 'Unable to register user' });
+    if (emailError) return next(emailError);
+    if (existingEmail) return res.status(409).json({ message: 'A user with that email already exists' });
+
+    // Hash password
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    // Insert user into custom public.users table
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .insert([{ email: email.toLowerCase(), password_hash: passwordHash }])
+      .select()
+      .single();
+
+    if (userError || !userData) {
+      return res.status(400).json({ message: userError?.message || 'Unable to register user' });
     }
 
+    // Insert profile into public.profiles table using retrieved id
     const { error: profileError } = await supabase
       .from('profiles')
-      .insert([{ id: data.user.id, ...profile }]);
+      .insert([{ id: userData.id, ...profile }]);
 
     if (profileError) {
+      // Rollback user creation if profile creation fails
+      await supabase.from('users').delete().eq('id', userData.id);
       return next(profileError);
     }
 
     return res.status(201).json({
-      _id: data.user.id,
+      _id: userData.id,
       name,
-      email: data.user.email || email,
+      email: userData.email,
       role: 'user',
       location,
-      token: generateToken(data.user.id, data.user.email || email),
+      token: generateToken(userData.id, userData.email),
     });
   } catch (error) {
     return next(error);
@@ -67,29 +91,43 @@ const registerUser = async (req, res, next) => {
 const loginUser = async (req, res, next) => {
   try {
     const { email, password } = req.body;
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error || !data.user) {
+    // Find user by email in public.users
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email.toLowerCase())
+      .maybeSingle();
+
+    if (userError) return next(userError);
+    if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    // Compare password hashes
+    const isMatch = await bcrypt.compare(password, user.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Fetch profile from public.profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('full_name, role, location')
-      .eq('id', data.user.id)
+      .eq('id', user.id)
       .maybeSingle();
 
-    const role = profile?.role || data.user.user_metadata?.role || 'user';
-    const name = profile?.full_name || data.user.user_metadata?.full_name || 'Member';
-    const location = profile?.location || data.user.user_metadata?.location || 'Nearby';
+    const role = profile?.role || user.role || 'user';
+    const name = profile?.full_name || 'Member';
+    const location = profile?.location || 'Nearby';
 
     return res.status(200).json({
-      _id: data.user.id,
+      _id: user.id,
       name,
-      email: data.user.email,
+      email: user.email,
       role,
       location,
-      token: generateToken(data.user.id, data.user.email),
+      token: generateToken(user.id, user.email),
     });
   } catch (error) {
     return next(error);
@@ -151,4 +189,5 @@ const updateProfile = async (req, res, next) => {
 };
 
 module.exports = { registerUser, loginUser, getMe, updateProfile };
+
 
