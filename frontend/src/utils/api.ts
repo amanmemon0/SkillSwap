@@ -77,7 +77,25 @@ export const api = {
     });
   },
 
+  adminGetUsers: async (): Promise<any[]> => {
+    return request<any[]>('/api/auth/admin/users');
+  },
+
+  adminUpdateUser: async (id: string | number, payload: { status?: string; role?: string }): Promise<any> => {
+    return request<any>(`/api/auth/admin/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  adminDeleteUser: async (id: string | number): Promise<any> => {
+    return request<any>(`/api/auth/admin/users/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   logout: () => {
     clearToken();
   },
 };
+

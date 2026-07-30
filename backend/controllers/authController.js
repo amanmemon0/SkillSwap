@@ -188,6 +188,98 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe, updateProfile };
+const getAllUsers = async (req, res, next) => {
+  try {
+    const { data: users, error: usersErr } = await supabase
+      .from('users')
+      .select('*');
+
+    if (usersErr) return next(usersErr);
+
+    const { data: profiles, error: profilesErr } = await supabase
+      .from('profiles')
+      .select('*');
+
+    if (profilesErr) return next(profilesErr);
+
+    // Combine users and profiles
+    const combined = users.map(user => {
+      const profile = profiles.find(p => p.id === user.id) || {};
+      
+      return {
+        id: user.id,
+        fullName: profile.full_name || 'Member',
+        username: profile.username || 'member',
+        email: user.email,
+        phone: profile.phone || '',
+        city: profile.city || 'Nearby',
+        bio: profile.bio || '',
+        teachSkills: profile.primary_skill ? [profile.primary_skill] : [],
+        learnSkills: profile.learning_skills || [],
+        skillLevel: profile.skill_level || 'Intermediate',
+        learningMode: profile.learning_mode || 'Online',
+        availability: profile.availability || ['Weekends'],
+        role: profile.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1)) : 'User',
+        status: profile.status || 'Active',
+        rating: 4.8,
+        totalReviews: 10,
+        completedSwaps: 5,
+        pendingSwaps: 0,
+        cancelledSwaps: 0,
+        reports: 0,
+        joinedAt: user.created_at || new Date().toISOString(),
+        lastLogin: user.created_at || new Date().toISOString(),
+      };
+    });
+
+    return res.status(200).json(combined);
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const adminUpdateUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { status, role } = req.body;
+
+    const updates = {};
+    if (status) updates.status = status;
+    if (role) updates.role = role.toLowerCase();
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) return next(error);
+
+    return res.status(200).json({ message: 'User updated successfully', data });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const adminDeleteUser = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('users')
+      .delete()
+      .eq('id', id);
+
+    if (error) return next(error);
+
+    return res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = { registerUser, loginUser, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser };
+
 
 

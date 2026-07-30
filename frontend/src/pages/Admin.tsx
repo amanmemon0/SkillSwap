@@ -26,7 +26,7 @@ import { api } from "../utils/api";
 type Status = "Active" | "Pending" | "Suspended" | "Banned";
 type Role = "User" | "Admin";
 type User = {
-  id: number;
+  id: string | number;
   fullName: string;
   username: string;
   email: string;
@@ -235,14 +235,7 @@ const formatDate = (date: string) =>
 
 export default function Admin() {
   const nav = useNavigate();
-  const [users, setUsers] = useState<User[]>(() => {
-    try {
-      const imported = JSON.parse(localStorage.getItem("skillswap-bulk-users") || "[]") as User[];
-      return [...imported, ...seed];
-    } catch {
-      return seed;
-    }
-  });
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("All");
@@ -250,18 +243,31 @@ export default function Admin() {
   const [city, setCity] = useState("All");
   const [sort, setSort] = useState("Newest");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<(string | number)[]>([]);
   const [drawer, setDrawer] = useState<User | null>(null);
   const [confirm, setConfirm] = useState<{
     action: string;
-    users: number[];
+    users: (string | number)[];
   } | null>(null);
   const [notice, setNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+
   useEffect(() => {
-    const timer = window.setTimeout(() => setLoading(false), 450);
-    return () => window.clearTimeout(timer);
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const data = await api.adminGetUsers();
+        setUsers(data);
+      } catch (err: any) {
+        console.error("Failed to fetch admin users:", err);
+        notify("Failed to load users from database.");
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
   }, []);
+
   const cities = useMemo(
     () => Array.from(new Set(users.map((user) => user.city))).sort(),
     [users],
@@ -300,31 +306,38 @@ export default function Admin() {
     setNotice(message);
     window.setTimeout(() => setNotice(""), 2500);
   };
-  const applyAction = (action: string, ids: number[]) => {
-    if (action === "Delete")
-      setUsers((current) => current.filter((user) => !ids.includes(user.id)));
-    else
-      setUsers((current) =>
-        current.map((user) =>
-          ids.includes(user.id)
-            ? {
-                ...user,
-                status:
-                  action === "Activate"
-                    ? "Active"
-                    : action === "Suspend"
-                      ? "Suspended"
-                      : "Banned",
-              }
-            : user,
-        ),
-      );
-    setSelected([]);
-    setDrawer(null);
-    setConfirm(null);
-    notify(`${ids.length} user${ids.length === 1 ? "" : "s"} updated.`);
+  const applyAction = async (action: string, ids: (string | number)[]) => {
+    try {
+      setLoading(true);
+      if (action === "Delete") {
+        await Promise.all(ids.map((id) => api.adminDeleteUser(id)));
+        setUsers((current) => current.filter((user) => !ids.includes(user.id)));
+      } else {
+        const targetStatus =
+          action === "Activate"
+            ? "Active"
+            : action === "Suspend"
+              ? "Suspended"
+              : "Banned";
+        await Promise.all(ids.map((id) => api.adminUpdateUser(id, { status: targetStatus })));
+        setUsers((current) =>
+          current.map((user) =>
+            ids.includes(user.id) ? { ...user, status: targetStatus } : user,
+          ),
+        );
+      }
+      setSelected([]);
+      setDrawer(null);
+      setConfirm(null);
+      notify(`${ids.length} user${ids.length === 1 ? "" : "s"} updated.`);
+    } catch (err: any) {
+      console.error("Failed to apply admin action:", err);
+      notify("Error updating users in the database.");
+    } finally {
+      setLoading(false);
+    }
   };
-  const toggle = (id: number) =>
+  const toggle = (id: string | number) =>
     setSelected((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
