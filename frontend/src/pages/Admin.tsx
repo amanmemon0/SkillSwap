@@ -497,10 +497,21 @@ export default function Admin() {
                   {filtered.length} matching users
                 </p>
               </div>
-              <span className="hidden items-center gap-2 text-xs font-bold text-ink/45 sm:flex">
-                <Filter size={14} />
-                Filters update instantly
-              </span>
+              <div className="flex items-center gap-3">
+                {filtered.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setSelected(filtered.map((user) => user.id))}
+                    className="rounded-lg bg-violet/10 px-3 py-2 text-xs font-extrabold text-violet hover:bg-violet hover:text-white"
+                  >
+                    Select all {filtered.length} matching
+                  </button>
+                )}
+                <span className="hidden items-center gap-2 text-xs font-bold text-ink/45 sm:flex">
+                  <Filter size={14} />
+                  Filters update instantly
+                </span>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1120px] text-left">
