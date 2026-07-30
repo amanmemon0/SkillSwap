@@ -1,7 +1,7 @@
 import { Navigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import { supabase } from './supabaseClient';
+import { api, getToken } from '../utils/api';
 
 export default function ProtectedRoute({ role, children }: { role: 'admin' | 'user'; children: ReactNode }) {
   const [loading, setLoading] = useState(true);
@@ -11,40 +11,29 @@ export default function ProtectedRoute({ role, children }: { role: 'admin' | 'us
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
+        const token = getToken();
+        if (!token) {
           setAuthenticated(false);
           setLoading(false);
           return;
         }
 
+        const user = await api.getMe();
         setAuthenticated(true);
-        console.log('ProtectedRoute: Active session found for User ID:', session.user.id);
-
-        // Fetch the user's role from public.profiles
-        const { data: profile, error } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-
-        console.log('ProtectedRoute: Fetched database profile:', profile);
-        if (error) {
-          console.error('ProtectedRoute: Error fetching user role:', error.message, error);
-        }
-
-        const roleVal = profile?.role || session.user.user_metadata?.role || 'user';
-        console.log('ProtectedRoute: Resolved role value:', roleVal, 'Expected target role:', role);
-        setUserRole(roleVal as 'admin' | 'user');
+        console.log('ProtectedRoute: Active backend session found for User ID:', user._id);
+        
+        setUserRole(user.role);
+        console.log('ProtectedRoute: Resolved role value:', user.role, 'Expected target role:', role);
       } catch (err) {
         console.error('Session check failed:', err);
+        setAuthenticated(false);
       } finally {
         setLoading(false);
       }
     };
 
     checkSession();
-  }, []);
+  }, [role]);
 
   if (loading) {
     return (
@@ -64,3 +53,4 @@ export default function ProtectedRoute({ role, children }: { role: 'admin' | 'us
 
   return <>{children}</>;
 }
+
