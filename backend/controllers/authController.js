@@ -25,6 +25,7 @@ const registerUser = async (req, res, next) => {
       learning_skills: learningSkills,
       availability,
       learning_mode: learningMode,
+      role: 'user',
     };
 
     const { data: existingUser, error: usernameError } = await supabase
@@ -54,6 +55,8 @@ const registerUser = async (req, res, next) => {
       _id: data.user.id,
       name,
       email: data.user.email || email,
+      role: 'user',
+      location,
       token: generateToken(data.user.id, data.user.email || email),
     });
   } catch (error) {
@@ -72,18 +75,20 @@ const loginUser = async (req, res, next) => {
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('full_name')
+      .select('full_name, role, location')
       .eq('id', data.user.id)
-      .single();
+      .maybeSingle();
 
-    if (profileError || !profile) {
-      return next(profileError || new Error('User profile not found'));
-    }
+    const role = profile?.role || data.user.user_metadata?.role || 'user';
+    const name = profile?.full_name || data.user.user_metadata?.full_name || 'Member';
+    const location = profile?.location || data.user.user_metadata?.location || 'Nearby';
 
     return res.status(200).json({
       _id: data.user.id,
-      name: profile.full_name,
+      name,
       email: data.user.email,
+      role,
+      location,
       token: generateToken(data.user.id, data.user.email),
     });
   } catch (error) {
@@ -97,20 +102,53 @@ const getMe = async (req, res, next) => {
       .from('profiles')
       .select('*')
       .eq('id', req.user.id)
-      .single();
+      .maybeSingle();
 
-    if (error || !profile) {
-      return res.status(404).json({ message: 'User not found' });
+    if (error) {
+      return next(error);
     }
 
     return res.status(200).json({
-      _id: profile.id,
-      name: profile.full_name,
+      _id: req.user.id,
+      name: profile?.full_name || 'Member',
       email: req.user.email,
+      role: profile?.role || 'user',
+      location: profile?.location || 'Nearby',
     });
   } catch (error) {
     return next(error);
   }
 };
 
-module.exports = { registerUser, loginUser, getMe };
+const updateProfile = async (req, res, next) => {
+  try {
+    const { name, location } = req.body;
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .upsert({
+        id: req.user.id,
+        full_name: name,
+        location: location,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
+    return res.status(200).json({
+      _id: data.id,
+      name: data.full_name,
+      location: data.location,
+      email: req.user.email,
+      role: data.role || 'user',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = { registerUser, loginUser, getMe, updateProfile };
+

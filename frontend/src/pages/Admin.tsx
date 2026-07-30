@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, Button } from "../components/ui/Primitives";
-import { supabase } from "../auth/supabaseClient";
+import { api } from "../utils/api";
 
 type Status = "Active" | "Pending" | "Suspended" | "Banned";
 type Role = "User" | "Admin";
@@ -354,8 +354,8 @@ export default function Admin() {
           User Management
         </button>
         <button
-          onClick={async () => {
-            await supabase.auth.signOut();
+          onClick={() => {
+            api.logout();
             nav("/login");
           }}
           className="mt-auto flex absolute bottom-6 items-center gap-3 px-3 text-sm font-bold text-white/60 hover:text-white"

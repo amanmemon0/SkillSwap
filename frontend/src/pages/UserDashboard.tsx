@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, BookOpen, Compass, LogOut, MapPin, MessageCircle, Search, Sparkles, UserRound, X } from 'lucide-react';
-import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
 import { Avatar, Button, Status } from '../components/ui/Primitives';
 
 const nearby = [
@@ -27,41 +27,21 @@ export default function UserDashboard() {
   useEffect(() => {
     const getProfile = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('full_name, location')
-            .eq('id', session.user.id)
-            .single();
-
-          if (error) {
-            console.error('Error fetching dashboard profile:', error.message);
-          }
-
-          if (data) {
-            setProfile({ ...data, email: session.user.email || '' });
-          } else {
-            setProfile({
-              full_name: session.user.user_metadata?.full_name || 'Member',
-              location: session.user.user_metadata?.location || 'Nearby',
-              email: session.user.email || '',
-            });
-          }
-        }
+        const user = await api.getMe();
+        setProfile({
+          full_name: user.name,
+          location: user.location,
+          email: user.email,
+        });
       } catch (err) {
-        console.error('Failed to get dashboard session:', err);
+        console.error('Failed to get dashboard profile:', err);
       }
     };
     getProfile();
   }, []);
 
-  const logout = async () => {
-    try {
-      await supabase.auth.signOut();
-    } catch (err) {
-      console.error('Sign out error:', err);
-    }
+  const logout = () => {
+    api.logout();
     nav('/login');
   };
 

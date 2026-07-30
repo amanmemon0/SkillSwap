@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { ArrowLeft, ArrowRight, Camera, Check } from 'lucide-react';
 import AuthShell from '../layouts/AuthShell';
 import { Button } from '../components/ui/Primitives';
-import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
+
 
 const skills = ['Web Development', 'Python', 'Graphic Design', 'Guitar', 'Cooking', 'Photography', 'UI/UX', 'Public Speaking', 'Excel'];
 const availabilityOptions = ['Weekdays', 'Weekends', 'Morning', 'Afternoon', 'Evening'];
@@ -47,16 +48,14 @@ export default function Register() {
   const removeWantedSkill = (skill: string) => setValue('learningSkills', getValues('learningSkills').filter((item) => item !== skill), { shouldValidate: true });
   const submit = async (data: Form) => {
     setBusy(true); setRegError('');
-    const location = [data.city, data.state, data.country].join(', ');
-    const profile = { full_name: data.name, username: data.username.toLowerCase(), country: data.country, state: data.state, city: data.city, location, bio: data.bio, primary_skill: data.primarySkill, skill_level: data.skillLevel, learning_skills: data.learningSkills, availability: data.availability, learning_mode: data.learningMode, role: 'user' };
     try {
-      const { data: existingProfile, error: usernameError } = await supabase.from('profiles').select('id').eq('username', profile.username).maybeSingle();
-      if (usernameError) { setRegError('We could not check that username. Please try again.'); return; }
-      if (existingProfile) { setRegError('That username is already taken. Try another one.'); return; }
-      const { data: authData, error: authError } = await supabase.auth.signUp({ email: data.email, password: data.password, options: { data: profile } });
-      if (authError) { setRegError(authError.message); return; }
-      if (authData.user) { const { error } = await supabase.from('profiles').upsert({ id: authData.user.id, ...profile }); if (error) console.error('Error creating profile record:', error.message); nav('/dashboard'); }
-    } catch (error: unknown) { setRegError(error instanceof Error ? error.message : 'An error occurred during registration.'); } finally { setBusy(false); }
+      await api.register(data);
+      nav('/dashboard');
+    } catch (error: any) {
+      setRegError(error.message || 'An error occurred during registration.');
+    } finally {
+      setBusy(false);
+    }
   };
   return <AuthShell><Link to="/login" className="text-lg font-extrabold">SkillSwap</Link><p className="eyebrow mt-7">Start your exchange · Step {step} of 4</p><h2 className="mt-2 font-display text-4xl">{stepTitles[step - 1]}</h2><p className="mt-2 text-sm leading-6 text-ink/55">{stepDescriptions[step - 1]}</p><div className="mt-5 flex gap-2" aria-label={`Step ${step} of 4`}>{[1, 2, 3, 4].map((number) => <i key={number} className={`h-1.5 flex-1 rounded ${step >= number ? 'bg-violet' : 'bg-ink/10'}`} />)}</div>
     <form onSubmit={handleSubmit(submit)} className="mt-6 space-y-4">
