@@ -6,8 +6,17 @@ export interface UserResponse {
   email: string;
   role: 'admin' | 'user';
   location: string;
+  username: string;
+  phone: string;
+  bio: string;
+  primary_skill: string;
+  skill_level: string;
+  learning_skills: string[];
+  availability: string[];
+  learning_mode: string;
   token?: string;
 }
+
 
 export function getToken(): string | null {
   return localStorage.getItem('skillswap-token');
@@ -70,7 +79,17 @@ export const api = {
     return request<UserResponse>('/api/auth/me');
   },
 
-  updateProfile: async (payload: { name: string; location: string }): Promise<UserResponse> => {
+  updateProfile: async (payload: {
+    name?: string;
+    location?: string;
+    phone?: string;
+    bio?: string;
+    primarySkill?: string;
+    skillLevel?: string;
+    learningSkills?: string[];
+    availability?: string[];
+    learningMode?: string;
+  }): Promise<UserResponse> => {
     return request<UserResponse>('/api/auth/profile', {
       method: 'PUT',
       body: JSON.stringify(payload),

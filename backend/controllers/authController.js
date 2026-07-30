@@ -152,6 +152,14 @@ const getMe = async (req, res, next) => {
       email: req.user.email,
       role: profile?.role || 'user',
       location: profile?.location || 'Nearby',
+      username: profile?.username || 'member',
+      phone: profile?.phone || '',
+      bio: profile?.bio || '',
+      primary_skill: profile?.primary_skill || '',
+      skill_level: profile?.skill_level || 'Intermediate',
+      learning_skills: profile?.learning_skills || [],
+      availability: profile?.availability || [],
+      learning_mode: profile?.learning_mode || 'Both',
     });
   } catch (error) {
     return next(error);
@@ -160,15 +168,24 @@ const getMe = async (req, res, next) => {
 
 const updateProfile = async (req, res, next) => {
   try {
-    const { name, location } = req.body;
+    const { name, location, phone, bio, primarySkill, skillLevel, learningSkills, availability, learningMode } = req.body;
+
+    const updates = {
+      id: req.user.id,
+    };
+    if (name !== undefined) updates.full_name = name;
+    if (location !== undefined) updates.location = location;
+    if (phone !== undefined) updates.phone = phone;
+    if (bio !== undefined) updates.bio = bio;
+    if (primarySkill !== undefined) updates.primary_skill = primarySkill;
+    if (skillLevel !== undefined) updates.skill_level = skillLevel;
+    if (learningSkills !== undefined) updates.learning_skills = learningSkills;
+    if (availability !== undefined) updates.availability = availability;
+    if (learningMode !== undefined) updates.learning_mode = learningMode;
 
     const { data, error } = await supabase
       .from('profiles')
-      .upsert({
-        id: req.user.id,
-        full_name: name,
-        location: location,
-      })
+      .upsert(updates)
       .select()
       .single();
 
@@ -182,6 +199,14 @@ const updateProfile = async (req, res, next) => {
       location: data.location,
       email: req.user.email,
       role: data.role || 'user',
+      username: data.username || 'member',
+      phone: data.phone || '',
+      bio: data.bio || '',
+      primary_skill: data.primary_skill || '',
+      skill_level: data.skill_level || 'Intermediate',
+      learning_skills: data.learning_skills || [],
+      availability: data.availability || [],
+      learning_mode: data.learning_mode || 'Both',
     });
   } catch (error) {
     return next(error);
