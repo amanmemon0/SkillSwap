@@ -61,6 +61,9 @@ const registerUser = async (req, res, next) => {
       .single();
 
     if (userError || !userData) {
+      if (userError?.code === '23505') {
+        return res.status(409).json({ message: 'A user with that email already exists' });
+      }
       return res.status(400).json({ message: userError?.message || 'Unable to register user' });
     }
 
@@ -72,8 +75,12 @@ const registerUser = async (req, res, next) => {
     if (profileError) {
       // Rollback user creation if profile creation fails
       await supabase.from('users').delete().eq('id', userData.id);
+      if (profileError.code === '23505') {
+        return res.status(409).json({ message: 'That username is already taken' });
+      }
       return next(profileError);
     }
+
 
     return res.status(201).json({
       _id: userData.id,
