@@ -11,7 +11,9 @@ if (!supabaseKey) {
   throw new Error('SUPABASE_SERVICE_ROLE_KEY must be configured. The backend API requires the service role key to bypass RLS.');
 }
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: { autoRefreshToken: false, persistSession: false },
+});
 
 module.exports = supabase;
 

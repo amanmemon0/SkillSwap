@@ -4,6 +4,10 @@ const dotenv = require('dotenv');
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured');
+}
+
 const authRoutes = require('./routes/authRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');

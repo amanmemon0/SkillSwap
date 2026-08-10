@@ -8,6 +8,25 @@ const generateToken = (id, email) => {
   });
 };
 
+const normalizeRole = (role) => String(role || 'user').toLowerCase() === 'admin' ? 'admin' : 'user';
+
+const serializeUser = (user, profile, token) => ({
+  _id: user.id,
+  name: profile.full_name || 'Member',
+  email: profile.email || user.email,
+  role: normalizeRole(profile.role || user.role),
+  location: profile.location || 'Nearby',
+  username: profile.username || 'member',
+  phone: profile.phone || '',
+  bio: profile.bio || '',
+  primary_skill: profile.primary_skill || '',
+  skill_level: profile.skill_level || 'Intermediate',
+  learning_skills: profile.learning_skills || [],
+  availability: profile.availability || [],
+  learning_mode: profile.learning_mode || 'Both',
+  ...(token ? { token } : {}),
+});
+
 const registerUser = async (req, res, next) => {
   try {
     const { name, username, email, password, phone, country, state, city, bio, primarySkill, skillLevel, learningSkills, availability, learningMode } = req.body;
@@ -15,6 +34,7 @@ const registerUser = async (req, res, next) => {
     const profile = {
       full_name: name,
       username: username.toLowerCase(),
+      email: email.toLowerCase(),
       phone: phone || null,
       country,
       state,
@@ -68,9 +88,11 @@ const registerUser = async (req, res, next) => {
     }
 
     // Insert profile into public.profiles table using retrieved id
-    const { error: profileError } = await supabase
+    const { data: createdProfile, error: profileError } = await supabase
       .from('profiles')
-      .insert([{ id: userData.id, ...profile }]);
+      .insert([{ id: userData.id, ...profile }])
+      .select()
+      .single();
 
     if (profileError) {
       // Rollback user creation if profile creation fails
@@ -82,14 +104,11 @@ const registerUser = async (req, res, next) => {
     }
 
 
-    return res.status(201).json({
-      _id: userData.id,
-      name,
-      email: userData.email,
-      role: 'user',
-      location,
-      token: generateToken(userData.id, userData.email),
-    });
+    return res.status(201).json(serializeUser(
+      userData,
+      createdProfile,
+      generateToken(userData.id, userData.email),
+    ));
   } catch (error) {
     return next(error);
   }
@@ -120,22 +139,14 @@ const loginUser = async (req, res, next) => {
     // Fetch profile from public.profiles
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('full_name, role, location')
+      .select('*')
       .eq('id', user.id)
       .maybeSingle();
 
-    const role = profile?.role || user.role || 'user';
-    const name = profile?.full_name || 'Member';
-    const location = profile?.location || 'Nearby';
+    if (profileError) return next(profileError);
+    if (!profile) return res.status(404).json({ message: 'User profile not found' });
 
-    return res.status(200).json({
-      _id: user.id,
-      name,
-      email: user.email,
-      role,
-      location,
-      token: generateToken(user.id, user.email),
-    });
+    return res.status(200).json(serializeUser(user, profile, generateToken(user.id, user.email)));
   } catch (error) {
     return next(error);
   }
@@ -149,25 +160,10 @@ const getMe = async (req, res, next) => {
       .eq('id', req.user.id)
       .maybeSingle();
 
-    if (error) {
-      return next(error);
-    }
+    if (error) return next(error);
+    if (!profile) return res.status(404).json({ message: 'User profile not found' });
 
-    return res.status(200).json({
-      _id: req.user.id,
-      name: profile?.full_name || 'Member',
-      email: req.user.email,
-      role: profile?.role || 'user',
-      location: profile?.location || 'Nearby',
-      username: profile?.username || 'member',
-      phone: profile?.phone || '',
-      bio: profile?.bio || '',
-      primary_skill: profile?.primary_skill || '',
-      skill_level: profile?.skill_level || 'Intermediate',
-      learning_skills: profile?.learning_skills || [],
-      availability: profile?.availability || [],
-      learning_mode: profile?.learning_mode || 'Both',
-    });
+    return res.status(200).json(serializeUser({ id: req.user.id, email: req.user.email }, profile));
   } catch (error) {
     return next(error);
   }
@@ -177,9 +173,7 @@ const updateProfile = async (req, res, next) => {
   try {
     const { name, location, phone, bio, primarySkill, skillLevel, learningSkills, availability, learningMode } = req.body;
 
-    const updates = {
-      id: req.user.id,
-    };
+    const updates = {};
     if (name !== undefined) updates.full_name = name;
     if (location !== undefined) updates.location = location;
     if (phone !== undefined) updates.phone = phone;
@@ -192,7 +186,8 @@ const updateProfile = async (req, res, next) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .upsert(updates)
+      .update(updates)
+      .eq('id', req.user.id)
       .select()
       .single();
 
@@ -200,21 +195,7 @@ const updateProfile = async (req, res, next) => {
       return res.status(400).json({ message: error.message });
     }
 
-    return res.status(200).json({
-      _id: data.id,
-      name: data.full_name,
-      location: data.location,
-      email: req.user.email,
-      role: data.role || 'user',
-      username: data.username || 'member',
-      phone: data.phone || '',
-      bio: data.bio || '',
-      primary_skill: data.primary_skill || '',
-      skill_level: data.skill_level || 'Intermediate',
-      learning_skills: data.learning_skills || [],
-      availability: data.availability || [],
-      learning_mode: data.learning_mode || 'Both',
-    });
+    return res.status(200).json(serializeUser({ id: req.user.id, email: req.user.email }, data));
   } catch (error) {
     return next(error);
   }
@@ -276,8 +257,8 @@ const adminUpdateUser = async (req, res, next) => {
     const { status, role } = req.body;
 
     const updates = {};
-    if (status) updates.status = status;
-    if (role) updates.role = role.toLowerCase();
+    if (status !== undefined) updates.status = status;
+    if (role !== undefined) updates.role = role.toLowerCase();
 
     const { data, error } = await supabase
       .from('profiles')
