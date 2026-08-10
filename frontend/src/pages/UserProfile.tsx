@@ -3,6 +3,8 @@ import { Award, BookOpen, Check, Edit3, GraduationCap, MapPin, Phone, Save, Star
 import { api } from '../utils/api';
 import { Button } from '../components/ui/Primitives';
 import Navbar from '../components/Navbar';
+import { SkillRequestPanel } from '../features/skill-management/SkillManagement';
+import { skillManagementApi } from '../features/skill-management/api';
 
 type Profile = {
   id: string;
@@ -44,6 +46,7 @@ export default function UserProfile() {
   const [primarySkill, setPrimarySkill] = useState('');
   const [skillLevel, setSkillLevel] = useState('');
   const [learningMode, setLearningMode] = useState('Both');
+  const [approvedSkills, setApprovedSkills] = useState<string[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -76,6 +79,12 @@ export default function UserProfile() {
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    void skillManagementApi.getCategories().then((categories) =>
+      setApprovedSkills(categories.flatMap((category) => category.skills)),
+    );
   }, []);
 
   const save = async () => {
@@ -220,11 +229,14 @@ export default function UserProfile() {
                     </label>
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Primary Skill to Teach
-                      <input
+                      <select
                         value={primarySkill}
                         onChange={(e) => setPrimarySkill(e.target.value)}
                         className="field mt-2"
-                      />
+                      >
+                        <option value="">Select an approved skill</option>
+                        {approvedSkills.map((skill) => <option key={skill}>{skill}</option>)}
+                      </select>
                     </label>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -397,6 +409,8 @@ export default function UserProfile() {
                 </div>
               </div>
             </div>
+
+            <SkillRequestPanel member={{ id: profile.id, name: profile.full_name, email: profile.email }} />
 
             {/* Settings & Availability Card */}
             <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-ink/5 text-sm space-y-4">

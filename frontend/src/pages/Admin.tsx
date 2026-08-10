@@ -22,6 +22,7 @@ import {
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, Button } from "../components/ui/Primitives";
 import { api } from "../utils/api";
+import { SkillApprovalQueue } from "../features/skill-management/SkillManagement";
 
 type Status = "Active" | "Pending" | "Suspended" | "Banned";
 type Role = "User" | "Admin";
@@ -419,6 +420,9 @@ export default function Admin() {
                 Add admin
               </Button>
             </div>
+          </div>
+          <div className="mb-6">
+            <SkillApprovalQueue />
           </div>
           <div className="rounded-3xl border bg-white p-4 shadow-sm">
             <div className="grid gap-3 xl:grid-cols-[1fr_repeat(4,auto)]">
