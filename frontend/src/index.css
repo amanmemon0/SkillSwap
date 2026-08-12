@@ -1,6 +1,155 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-@layer base { html{@apply scroll-smooth} *{@apply border-ink/10} body{@apply m-0 bg-[#f7f5f2] font-sans text-ink antialiased} button,input,textarea{font:inherit} }
-@layer components { .grain{background-image:radial-gradient(rgba(33,27,71,.12) .7px,transparent .7px);background-size:7px 7px}.eyebrow{@apply font-mono text-[10px] font-bold uppercase tracking-[.2em] text-violet}.field{@apply w-full border-b border-ink/20 bg-transparent px-0 py-3 text-sm outline-none transition placeholder:text-ink/35 focus:border-violet}.action{@apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold transition focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2}.navlink{@apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink/55 transition hover:bg-ink/5 hover:text-ink}.navlink-active{@apply bg-ink text-white hover:bg-ink hover:text-white} }
+
+@layer base {
+  html {
+    @apply scroll-smooth;
+  }
+  * {
+    @apply border-ink/10;
+  }
+  body {
+    @apply m-0 bg-surface font-sans text-ink antialiased;
+  }
+  button, input, textarea, select {
+    font: inherit;
+  }
+}
+
+@layer components {
+  /* ─── Typography ─── */
+  .eyebrow {
+    @apply font-mono text-[10px] font-bold uppercase tracking-[.2em] text-violet;
+  }
+
+  /* ─── Form Fields ─── */
+  .field {
+    @apply w-full rounded-xl border border-ink/10 bg-white px-4 py-3 text-sm outline-none transition
+    placeholder:text-ink/35
+    focus:border-violet focus:ring-2 focus:ring-violet/10;
+  }
+
+  /* ─── Buttons ─── */
+  .action {
+    @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-bold
+    transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-violet focus:ring-offset-2;
+  }
+
+  /* ─── Navigation ─── */
+  .navlink {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-ink/55
+    transition hover:bg-ink/5 hover:text-ink;
+  }
+  .navlink-active {
+    @apply bg-ink text-white hover:bg-ink hover:text-white;
+  }
+
+  /* ─── Skill Tags ─── */
+  .skill-tag {
+    @apply inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold
+    transition-transform duration-200 hover:scale-105;
+  }
+  .skill-tag-tech {
+    @apply bg-violet/10 text-violet;
+  }
+  .skill-tag-design {
+    @apply bg-softpink/20 text-pink-700;
+  }
+  .skill-tag-music {
+    @apply bg-warmyellow/20 text-amber-800;
+  }
+  .skill-tag-language {
+    @apply bg-cyan/10 text-cyan-700;
+  }
+  .skill-tag-fitness {
+    @apply bg-emerald-50 text-emerald-700;
+  }
+  .skill-tag-photo {
+    @apply bg-orange-50 text-orange-700;
+  }
+  .skill-tag-cooking {
+    @apply bg-red-50 text-red-700;
+  }
+  .skill-tag-business {
+    @apply bg-blue-50 text-blue-700;
+  }
+
+  /* ─── Live Badge ─── */
+  .live-badge {
+    @apply inline-flex items-center gap-2 rounded-full bg-red-500/10 px-3 py-1.5
+    text-[11px] font-bold text-red-600;
+  }
+  .live-dot {
+    @apply h-2 w-2 rounded-full bg-red-500 animate-pulse-live;
+  }
+
+  /* ─── Match Score Ring ─── */
+  .match-ring {
+    @apply relative inline-flex items-center justify-center;
+  }
+
+  /* ─── Exchange Visualization ─── */
+  .exchange-vis {
+    @apply flex items-center gap-3;
+  }
+  .exchange-arrow {
+    @apply text-violet font-bold text-lg animate-exchange-pulse;
+  }
+
+  /* ─── Cards ─── */
+  .glass-card {
+    @apply rounded-3xl bg-white/80 backdrop-blur-md border border-white/50 shadow-card;
+  }
+  .hover-lift {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-float;
+  }
+
+  /* ─── Status Indicators ─── */
+  .status-online {
+    @apply h-3 w-3 rounded-full bg-emerald-400 ring-2 ring-white;
+  }
+  .status-busy {
+    @apply h-3 w-3 rounded-full bg-warmyellow ring-2 ring-white;
+  }
+  .status-offline {
+    @apply h-3 w-3 rounded-full bg-gray-400 ring-2 ring-white;
+  }
+
+  /* ─── Gradient Text ─── */
+  .gradient-text {
+    @apply bg-gradient-to-r from-violet to-electric bg-clip-text text-transparent;
+  }
+
+  /* ─── Section ─── */
+  .section-container {
+    @apply mx-auto max-w-7xl px-5 sm:px-8;
+  }
+}
+
+/* ─── Custom Scrollbar ─── */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(26, 20, 64, 0.15);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 20, 64, 0.25);
+}
+
+/* ─── Smooth transitions for route changes ─── */
+.page-enter {
+  opacity: 0;
+  transform: translateY(12px);
+}
+.page-enter-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}

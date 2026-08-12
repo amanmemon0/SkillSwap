@@ -8,22 +8,36 @@ import UserDashboard from './pages/UserDashboard';
 import UserProfile from './pages/UserProfile';
 import Exchanges from './pages/Exchanges';
 import Messages from './pages/Messages';
+import ExploreSkills from './pages/ExploreSkills';
+import SkillMatch from './pages/SkillMatch';
+import ExchangeRequest from './pages/ExchangeRequest';
+import Community from './pages/Community';
 import ProtectedRoute from './auth/ProtectedRoute';
 
 export default function App() {
   return (
     <Routes>
+      {/* Public Routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/explore" element={<ExploreSkills />} />
+      <Route path="/match" element={<SkillMatch />} />
+      <Route path="/exchange-request" element={<ExchangeRequest />} />
+      <Route path="/community" element={<Community />} />
+
+      {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />
       <Route path="/admin/import" element={<ProtectedRoute role="admin"><BulkUserImport /></ProtectedRoute>} />
+
+      {/* Authenticated User Routes */}
       <Route path="/dashboard" element={<ProtectedRoute role="user"><UserDashboard /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute role="user"><UserProfile /></ProtectedRoute>} />
       <Route path="/exchanges" element={<ProtectedRoute role="user"><Exchanges /></ProtectedRoute>} />
       <Route path="/messages" element={<ProtectedRoute role="user"><Messages /></ProtectedRoute>} />
+
+      {/* Fallback */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
-

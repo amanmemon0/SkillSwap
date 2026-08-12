@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { ArrowLeft, ArrowRight, Camera, Check } from 'lucide-react';
 import AuthShell from '../layouts/AuthShell';
-import { Button } from '../components/ui/Primitives';
+import { Button, SkillTag } from '../components/ui/Primitives';
 import { api } from '../utils/api';
 
 
@@ -31,15 +31,33 @@ const schema = z.object({
 }).refine((data) => data.password === data.confirmPassword, { path: ['confirmPassword'], message: 'Passwords do not match' });
 type Form = z.infer<typeof schema>;
 
-const stepTitles = ['Let’s get acquainted.', 'Where are you based?', 'Make your first match.', 'One last thing.'];
-const stepDescriptions = ['A few essentials help keep the community trusted.', 'Location helps us introduce you to nearby neighbours.', 'Tell people what you can share and what you want to explore.', 'Review the community agreement and you’re ready to join.'];
+const stepTitles = ["Let's get acquainted.", 'Where are you based?', 'Make your first match.', 'One last thing.'];
+const stepDescriptions = [
+  'A few essentials help keep the community trusted.',
+  'Location helps us introduce you to nearby people.',
+  'Tell people what you can share and what you want to explore.',
+  'Review the community agreement and you\'re ready to join.',
+];
 
 export default function Register() {
-  const nav = useNavigate(); const [step, setStep] = useState(1); const [strength, setStrength] = useState(0); const [busy, setBusy] = useState(false); const [regError, setRegError] = useState(''); const [photoName, setPhotoName] = useState(''); const [wantedSkill, setWantedSkill] = useState('');
-  const { register, handleSubmit, trigger, getValues, setValue, watch, formState: { errors } } = useForm<Form>({ resolver: zodResolver(schema), defaultValues: { learningSkills: [], availability: [], learningMode: 'Both' } });
-  const password = register('password', { onChange: (event) => setStrength(Math.min(4, Math.ceil(event.target.value.length / 3))) });
-  const continueTo = async (fields: Array<keyof Form>) => { if (await trigger(fields)) setStep((current) => current + 1); };
-  
+  const nav = useNavigate();
+  const [step, setStep] = useState(1);
+  const [strength, setStrength] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [regError, setRegError] = useState('');
+  const [photoName, setPhotoName] = useState('');
+  const [wantedSkill, setWantedSkill] = useState('');
+  const { register, handleSubmit, trigger, getValues, setValue, watch, formState: { errors } } = useForm<Form>({
+    resolver: zodResolver(schema),
+    defaultValues: { learningSkills: [], availability: [], learningMode: 'Both' },
+  });
+  const password = register('password', {
+    onChange: (event) => setStrength(Math.min(4, Math.ceil(event.target.value.length / 3))),
+  });
+  const continueTo = async (fields: Array<keyof Form>) => {
+    if (await trigger(fields)) setStep((current) => current + 1);
+  };
+
   const selectedCountry = watch('country');
   const selectedState = watch('state');
   const learningSkills = watch('learningSkills');
@@ -131,9 +149,12 @@ export default function Register() {
     setValue('learningSkills', [...getValues('learningSkills'), skill], { shouldValidate: true });
     setWantedSkill('');
   };
-  const removeWantedSkill = (skill: string) => setValue('learningSkills', getValues('learningSkills').filter((item) => item !== skill), { shouldValidate: true });
+  const removeWantedSkill = (skill: string) =>
+    setValue('learningSkills', getValues('learningSkills').filter((item) => item !== skill), { shouldValidate: true });
+
   const submit = async (data: Form) => {
-    setBusy(true); setRegError('');
+    setBusy(true);
+    setRegError('');
     try {
       await api.register(data);
       nav('/dashboard');
@@ -143,65 +164,268 @@ export default function Register() {
       setBusy(false);
     }
   };
-  return <AuthShell><Link to="/login" className="text-lg font-extrabold">SkillSwap</Link><p className="eyebrow mt-7">Start your exchange · Step {step} of 4</p><h2 className="mt-2 font-display text-4xl">{stepTitles[step - 1]}</h2><p className="mt-2 text-sm leading-6 text-ink/55">{stepDescriptions[step - 1]}</p><div className="mt-5 flex gap-2" aria-label={`Step ${step} of 4`}>{[1, 2, 3, 4].map((number) => <i key={number} className={`h-1.5 flex-1 rounded ${step >= number ? 'bg-violet' : 'bg-ink/10'}`} />)}</div>
-    <form onSubmit={handleSubmit(submit)} className="mt-6 space-y-4">
-      {step === 1 && <><div className="grid gap-4 sm:grid-cols-2"><Field label="Full name" error={errors.name?.message}><input className="field" placeholder="Alex Morgan" autoComplete="name" {...register('name')} /></Field><Field label="Username" error={errors.username?.message}><input className="field" placeholder="alex_morgan" autoComplete="username" {...register('username')} /></Field></div><Field label="Email address" error={errors.email?.message}><input className="field" type="email" placeholder="name@example.com" autoComplete="email" {...register('email')} /></Field><div className="grid gap-4 sm:grid-cols-2"><Field label="Create password" error={errors.password?.message}><input className="field" type="password" autoComplete="new-password" {...password} /><span className="mt-2 flex gap-1">{[1, 2, 3, 4].map((value) => <i key={value} className={`h-1 flex-1 rounded ${value <= strength ? 'bg-violet' : 'bg-ink/10'}`} />)}</span></Field><Field label="Confirm password" error={errors.confirmPassword?.message}><input className="field" type="password" autoComplete="new-password" {...register('confirmPassword')} /></Field></div><Next onClick={() => continueTo(['name', 'username', 'email', 'password', 'confirmPassword'])} /></>}
-      {step === 2 && <>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Country" error={errors.country?.message}>
-            <select
-              className="field mt-2"
-              {...register('country', {
-                onChange: () => {
-                  setValue('state', '');
-                  setValue('city', '');
-                }
-              })}
-            >
-              <option value="">{loadingLocations.countries ? 'Loading countries...' : 'Choose Country'}</option>
-              {countries.map((c) => (
-                <option key={c.name} value={c.name}>{c.name}</option>
-              ))}
-            </select>
-          </Field>
 
-          <Field label="State" error={errors.state?.message}>
-            <select
-              className="field mt-2"
-              disabled={!selectedCountry || loadingLocations.states}
-              {...register('state', {
-                onChange: () => {
-                  setValue('city', '');
-                }
-              })}
-            >
-              <option value="">{loadingLocations.states ? 'Loading states...' : 'Choose State'}</option>
-              {states.map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
-              ))}
-            </select>
-          </Field>
+  return (
+    <AuthShell>
+      <Link to="/" className="flex items-center gap-2 text-lg font-extrabold">
+        <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-violet to-electric text-white text-xs">
+          🔄
+        </span>
+        SkillSwap
+      </Link>
+      <p className="eyebrow mt-7">Start your exchange · Step {step} of 4</p>
+      <h2 className="mt-2 font-display text-3xl font-bold sm:text-4xl">{stepTitles[step - 1]}</h2>
+      <p className="mt-2 text-sm leading-6 text-ink/55">{stepDescriptions[step - 1]}</p>
 
-          <Field label="City" error={errors.city?.message}>
-            <select
-              className="field mt-2"
-              disabled={!selectedState || loadingLocations.cities}
-              {...register('city')}
-            >
-              <option value="">{loadingLocations.cities ? 'Loading cities...' : 'Choose City'}</option>
-              {cities.map((ci) => (
-                <option key={ci} value={ci}>{ci}</option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-ink/25 p-3 text-sm font-bold"><span className="grid h-10 w-10 place-items-center rounded-full bg-mint"><Camera size={16} /></span><span>{photoName || 'Choose your profile photo'}<small className="block font-normal text-ink/45">optional, but friendly</small></span><input className="sr-only" type="file" accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name || '')} /></label><Field label="Short bio / about me" error={errors.bio?.message}><textarea className="field min-h-24 resize-y" maxLength={280} placeholder="I'm a third-year Computer Engineering student who enjoys web development and photography." {...register('bio')} /></Field><Navigation back={() => setStep(1)} next={() => continueTo(['country', 'state', 'city', 'bio'])} /></>}
-      {step === 3 && <><div className="grid gap-4 sm:grid-cols-2"><Field label="I can teach" error={errors.primarySkill?.message}><input className="field" list="teachable-skills" placeholder="Choose or add a skill" {...register('primarySkill')} /><datalist id="teachable-skills">{skills.map((skill) => <option key={skill} value={skill} />)}</datalist></Field><Field label="Skill level" error={errors.skillLevel?.message}><select className="field" {...register('skillLevel')}><option value="">Choose a level</option>{['Beginner', 'Intermediate', 'Advanced', 'Expert'].map((level) => <option key={level}>{level}</option>)}</select></Field></div><ChoiceGroup label="I want to learn" options={skills} error={errors.learningSkills?.message} register={register('learningSkills')} /><div className="flex gap-2"><input value={wantedSkill} onChange={(event) => setWantedSkill(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); addWantedSkill(); } }} className="field flex-1" placeholder="Add another skill you want to learn" /><Button type="button" onClick={addWantedSkill} className="bg-ink text-white hover:bg-violet">Add</Button></div>{learningSkills.filter((skill) => !skills.includes(skill)).length > 0 && <div className="flex flex-wrap gap-2">{learningSkills.filter((skill) => !skills.includes(skill)).map((skill) => <button type="button" key={skill} onClick={() => removeWantedSkill(skill)} className="rounded-full bg-violet px-3 py-2 text-xs font-bold text-white">{skill} ×</button>)}</div>}<ChoiceGroup label="Availability" options={availabilityOptions} error={errors.availability?.message} register={register('availability')} /><div><p className="text-sm font-bold">Online / offline</p><div className="mt-2 flex flex-wrap gap-2">{learningModes.map((mode) => <label key={mode} className="cursor-pointer"><input className="peer sr-only" type="radio" value={mode} {...register('learningMode')} /><span className="inline-flex rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink/60 peer-checked:border-violet peer-checked:bg-violet peer-checked:text-white">{mode}</span></label>)}</div>{errors.learningMode && <small className="text-coral">{errors.learningMode.message}</small>}</div><Navigation back={() => setStep(2)} next={() => continueTo(['primarySkill', 'skillLevel', 'learningSkills', 'availability', 'learningMode'])} /></>}
-      {step === 4 && <><label className="flex gap-2 rounded-2xl bg-mint/50 p-4 text-sm leading-6 text-ink/70"><input type="checkbox" className="mt-1 accent-violet" {...register('terms')} />I agree to the Terms &amp; Conditions and community guidelines.</label>{errors.terms && <small className="text-coral">{errors.terms.message}</small>}{regError && <p role="alert" className="rounded-xl bg-coral/20 p-3 text-xs font-bold text-ink">{regError}</p>}<div className="flex gap-3"><Back onClick={() => setStep(3)} /><Button disabled={busy} className="flex-1 bg-violet text-white hover:bg-ink">{busy ? 'Building your profile...' : <>Create account <Check size={16} /></>}</Button></div></>}
-    </form><p className="mt-5 text-center text-sm text-ink/55">Already a neighbour? <Link className="font-bold text-violet" to="/login">Sign in</Link></p></AuthShell>;
+      {/* Progress Bar */}
+      <div className="mt-5 flex gap-2" aria-label={`Step ${step} of 4`}>
+        {[1, 2, 3, 4].map((number) => (
+          <i
+            key={number}
+            className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+              step >= number ? 'bg-gradient-to-r from-violet to-electric' : 'bg-ink/10'
+            }`}
+          />
+        ))}
+      </div>
+
+      <form onSubmit={handleSubmit(submit)} className="mt-6 space-y-4">
+        {step === 1 && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Full name" error={errors.name?.message}>
+                <input className="field" placeholder="Alex Morgan" autoComplete="name" {...register('name')} />
+              </Field>
+              <Field label="Username" error={errors.username?.message}>
+                <input className="field" placeholder="alex_morgan" autoComplete="username" {...register('username')} />
+              </Field>
+            </div>
+            <Field label="Email address" error={errors.email?.message}>
+              <input className="field" type="email" placeholder="name@example.com" autoComplete="email" {...register('email')} />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Create password" error={errors.password?.message}>
+                <input className="field" type="password" autoComplete="new-password" {...password} />
+                <span className="mt-2 flex gap-1">
+                  {[1, 2, 3, 4].map((value) => (
+                    <i
+                      key={value}
+                      className={`h-1 flex-1 rounded-full transition-all ${
+                        value <= strength ? 'bg-gradient-to-r from-violet to-electric' : 'bg-ink/10'
+                      }`}
+                    />
+                  ))}
+                </span>
+              </Field>
+              <Field label="Confirm password" error={errors.confirmPassword?.message}>
+                <input className="field" type="password" autoComplete="new-password" {...register('confirmPassword')} />
+              </Field>
+            </div>
+            <Next onClick={() => continueTo(['name', 'username', 'email', 'password', 'confirmPassword'])} />
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="Country" error={errors.country?.message}>
+                <select className="field mt-2" {...register('country', { onChange: () => { setValue('state', ''); setValue('city', ''); } })}>
+                  <option value="">{loadingLocations.countries ? 'Loading countries...' : 'Choose Country'}</option>
+                  {countries.map((c) => <option key={c.name} value={c.name}>{c.name}</option>)}
+                </select>
+              </Field>
+              <Field label="State" error={errors.state?.message}>
+                <select className="field mt-2" disabled={!selectedCountry || loadingLocations.states} {...register('state', { onChange: () => { setValue('city', ''); } })}>
+                  <option value="">{loadingLocations.states ? 'Loading states...' : 'Choose State'}</option>
+                  {states.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+                </select>
+              </Field>
+              <Field label="City" error={errors.city?.message}>
+                <select className="field mt-2" disabled={!selectedState || loadingLocations.cities} {...register('city')}>
+                  <option value="">{loadingLocations.cities ? 'Loading cities...' : 'Choose City'}</option>
+                  {cities.map((ci) => <option key={ci} value={ci}>{ci}</option>)}
+                </select>
+              </Field>
+            </div>
+            <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-ink/20 p-3 text-sm font-bold hover:border-violet/30 hover:bg-violet/5 transition">
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-card">
+                <Camera size={16} className="text-violet" />
+              </span>
+              <span>
+                {photoName || 'Choose your profile photo'}
+                <small className="block font-normal text-ink/45">optional, but friendly</small>
+              </span>
+              <input className="sr-only" type="file" accept="image/*" onChange={(event) => setPhotoName(event.target.files?.[0]?.name || '')} />
+            </label>
+            <Field label="Short bio / about me" error={errors.bio?.message}>
+              <textarea className="field min-h-24 resize-y" maxLength={280} placeholder="I'm a third-year Computer Engineering student who enjoys web development and photography." {...register('bio')} />
+            </Field>
+            <Navigation back={() => setStep(1)} next={() => continueTo(['country', 'state', 'city', 'bio'])} />
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="I can teach" error={errors.primarySkill?.message}>
+                <input className="field" list="teachable-skills" placeholder="Choose or add a skill" {...register('primarySkill')} />
+                <datalist id="teachable-skills">
+                  {skills.map((skill) => <option key={skill} value={skill} />)}
+                </datalist>
+              </Field>
+              <Field label="Skill level" error={errors.skillLevel?.message}>
+                <select className="field" {...register('skillLevel')}>
+                  <option value="">Choose a level</option>
+                  {['Beginner', 'Intermediate', 'Advanced', 'Expert'].map((level) => (
+                    <option key={level}>{level}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <ChoiceGroup label="I want to learn" options={skills} error={errors.learningSkills?.message} register={register('learningSkills')} />
+
+            <div className="flex gap-2">
+              <input
+                value={wantedSkill}
+                onChange={(event) => setWantedSkill(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addWantedSkill();
+                  }
+                }}
+                className="field flex-1"
+                placeholder="Add another skill you want to learn"
+              />
+              <Button type="button" onClick={addWantedSkill} className="bg-gradient-to-r from-violet to-electric text-white">
+                Add
+              </Button>
+            </div>
+
+            {/* Custom skill chips */}
+            {learningSkills.filter((skill) => !skills.includes(skill)).length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {learningSkills
+                  .filter((skill) => !skills.includes(skill))
+                  .map((skill) => (
+                    <button
+                      type="button"
+                      key={skill}
+                      onClick={() => removeWantedSkill(skill)}
+                      className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1.5 text-xs font-bold text-white hover:opacity-80 transition"
+                    >
+                      {skill} ×
+                    </button>
+                  ))}
+              </div>
+            )}
+
+            <ChoiceGroup label="Availability" options={availabilityOptions} error={errors.availability?.message} register={register('availability')} />
+
+            <div>
+              <p className="text-sm font-bold">Online / offline</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {learningModes.map((mode) => (
+                  <label key={mode} className="cursor-pointer">
+                    <input className="peer sr-only" type="radio" value={mode} {...register('learningMode')} />
+                    <span className="inline-flex rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink/60 transition peer-checked:border-violet peer-checked:bg-gradient-to-r peer-checked:from-violet peer-checked:to-electric peer-checked:text-white">
+                      {mode}
+                    </span>
+                  </label>
+                ))}
+              </div>
+              {errors.learningMode && <small className="text-coral">{errors.learningMode.message}</small>}
+            </div>
+
+            <Navigation back={() => setStep(2)} next={() => continueTo(['primarySkill', 'skillLevel', 'learningSkills', 'availability', 'learningMode'])} />
+          </>
+        )}
+
+        {step === 4 && (
+          <>
+            <label className="flex gap-2 rounded-2xl bg-gradient-card border border-violet/10 p-4 text-sm leading-6 text-ink/70 cursor-pointer">
+              <input type="checkbox" className="mt-1 accent-violet" {...register('terms')} />
+              I agree to the Terms &amp; Conditions and community guidelines.
+            </label>
+            {errors.terms && <small className="text-coral">{errors.terms.message}</small>}
+            {regError && (
+              <p role="alert" className="rounded-xl bg-coral/10 border border-coral/20 p-3 text-xs font-bold text-coral">
+                {regError}
+              </p>
+            )}
+            <div className="flex gap-3">
+              <Back onClick={() => setStep(3)} />
+              <Button disabled={busy} className="flex-1 bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow">
+                {busy ? 'Building your profile...' : <><Check size={16} /> Create account</>}
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
+
+      <p className="mt-5 text-center text-sm text-ink/55">
+        Already a member?{' '}
+        <Link className="font-bold text-violet hover:text-electric transition" to="/login">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
+  );
 }
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) { return <label className="block text-sm font-bold">{label}{children}{error && <small className="block text-coral">{error}</small>}</label>; }
-function ChoiceGroup({ label, options, error, register }: { label: string; options: string[]; error?: string; register: UseFormRegisterReturn }) { return <div><p className="text-sm font-bold">{label}</p><div className="mt-2 flex flex-wrap gap-2">{options.map((option) => <label key={option} className="cursor-pointer"><input className="peer sr-only" type="checkbox" value={option} {...register} /><span className="inline-flex rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink/60 peer-checked:border-violet peer-checked:bg-violet peer-checked:text-white">{option}</span></label>)}</div>{error && <small className="text-coral">{error}</small>}</div>; }
-function Back({ onClick }: { onClick: () => void }) { return <Button type="button" onClick={onClick} className="bg-white text-ink ring-1 ring-ink/10 hover:bg-ink/5"><ArrowLeft size={16} /> Back</Button>; }
-function Next({ onClick }: { onClick: () => void }) { return <Button type="button" onClick={onClick} className="w-full bg-violet text-white hover:bg-ink">Continue <ArrowRight size={16} /></Button>; }
-function Navigation({ back, next }: { back: () => void; next: () => void }) { return <div className="flex gap-3"><Back onClick={back} /><Button type="button" onClick={next} className="flex-1 bg-violet text-white hover:bg-ink">Continue <ArrowRight size={16} /></Button></div>; }
+
+function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+  return (
+    <label className="block text-sm font-bold">
+      {label}
+      {children}
+      {error && <small className="block text-coral mt-1">{error}</small>}
+    </label>
+  );
+}
+
+function ChoiceGroup({ label, options, error, register }: { label: string; options: string[]; error?: string; register: UseFormRegisterReturn }) {
+  return (
+    <div>
+      <p className="text-sm font-bold">{label}</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option) => (
+          <label key={option} className="cursor-pointer">
+            <input className="peer sr-only" type="checkbox" value={option} {...register} />
+            <span className="inline-flex rounded-full border border-ink/15 px-3 py-2 text-xs font-bold text-ink/60 transition peer-checked:border-violet peer-checked:bg-gradient-to-r peer-checked:from-violet peer-checked:to-electric peer-checked:text-white">
+              {option}
+            </span>
+          </label>
+        ))}
+      </div>
+      {error && <small className="text-coral">{error}</small>}
+    </div>
+  );
+}
+
+function Back({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" onClick={onClick} className="bg-white text-ink ring-1 ring-ink/10 hover:bg-surface">
+      <ArrowLeft size={16} /> Back
+    </Button>
+  );
+}
+
+function Next({ onClick }: { onClick: () => void }) {
+  return (
+    <Button type="button" onClick={onClick} className="w-full bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow">
+      Continue <ArrowRight size={16} />
+    </Button>
+  );
+}
+
+function Navigation({ back, next }: { back: () => void; next: () => void }) {
+  return (
+    <div className="flex gap-3">
+      <Back onClick={back} />
+      <Button type="button" onClick={next} className="flex-1 bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow">
+        Continue <ArrowRight size={16} />
+      </Button>
+    </div>
+  );
+}

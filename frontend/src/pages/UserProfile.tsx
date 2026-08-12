@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Award, BookOpen, Check, Edit3, GraduationCap, MapPin, Phone, Save, Star, User } from 'lucide-react';
+import { Award, BookOpen, Calendar, Check, Clock, Edit3, GraduationCap, MapPin, Phone, Save, Star, User } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { api } from '../utils/api';
-import { Button } from '../components/ui/Primitives';
+import { Avatar, Button, SkillTag, StatusDot } from '../components/ui/Primitives';
 import Navbar from '../components/Navbar';
 import { SkillRequestPanel } from '../features/skill-management/SkillManagement';
 import { skillManagementApi } from '../features/skill-management/api';
@@ -24,12 +25,12 @@ type Profile = {
 // Static simulated history data to make the profile look rich and complete
 const mockTaughtHistory = [
   { id: 't1', title: 'React State Management & Hooks', student: 'Noah Williams', date: 'June 2026', reviews: 5 },
-  { id: 't2', title: 'Web Development Basics (HTML/CSS)', student: 'Arjun Rao', date: 'May 2026', reviews: 4.8 }
+  { id: 't2', title: 'Web Development Basics (HTML/CSS)', student: 'Arjun Rao', date: 'May 2026', reviews: 4.8 },
 ];
 
 const mockLearnedHistory = [
   { id: 'l1', title: 'Conversational Spanish', instructor: 'Meera Iyer', status: 'Ongoing (4/6 sessions)', date: 'Starts this week' },
-  { id: 'l2', title: 'Figma Auto Layout & Components', instructor: 'Aisha Patel', status: 'Completed', date: 'July 2026' }
+  { id: 'l2', title: 'Figma Auto Layout & Components', instructor: 'Aisha Patel', status: 'Completed', date: 'July 2026' },
 ];
 
 export default function UserProfile() {
@@ -128,8 +129,11 @@ export default function UserProfile() {
 
   if (!profile) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#f7f5f2]">
-        <p className="animate-pulse text-sm font-bold text-ink/50">Loading your profile…</p>
+      <main className="grid min-h-screen place-items-center bg-surface">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 rounded-full bg-violet/10 animate-pulse" />
+          <p className="mt-4 text-sm font-bold text-ink/50">Loading your profile…</p>
+        </div>
       </main>
     );
   }
@@ -137,60 +141,94 @@ export default function UserProfile() {
   const initialLetter = profile.full_name.trim().charAt(0).toUpperCase() || '?';
 
   return (
-    <main className="min-h-screen bg-[#f7f5f2] text-ink pb-12">
-      <Navbar />
+    <main className="min-h-screen bg-surface text-ink pb-12">
+      <Navbar variant="auth" />
 
-      <section className="mx-auto max-w-6xl px-5 mt-4">
-        {/* Profile Card Header */}
-        <div className="overflow-hidden rounded-[2.5rem] bg-ink p-8 text-white sm:p-10 relative">
-          <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-violet blur-3xl opacity-50" />
-          <p className="eyebrow text-mint relative z-10">Member Profile</p>
-          <div className="mt-6 flex flex-col sm:flex-row items-start sm:items-center gap-6 relative z-10">
-            <span className="grid h-24 w-24 shrink-0 place-items-center rounded-3xl bg-gradient-to-br from-violet to-[#a99eff] text-4xl font-extrabold shadow-md">
-              {initialLetter}
-            </span>
-            <div className="min-w-0 flex-1">
-              <h1 className="font-display text-4xl truncate">{profile.full_name}</h1>
-              <p className="mt-1.5 text-white/60 text-sm font-medium">@{profile.username} · {profile.email}</p>
-              <div className="mt-3 flex flex-wrap gap-4 items-center text-xs text-white/80">
-                <span className="flex items-center gap-1"><MapPin size={14} className="text-mint" /> {profile.location}</span>
-                <span className="flex items-center gap-1.5">
-                  <Star size={14} className="text-amber-400 fill-amber-400" />
-                  <b>4.9 Rating</b> (12 reviews)
-                </span>
+      <section className="mx-auto max-w-6xl px-5 mt-6 sm:px-8">
+        {/* Profile Header Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="overflow-hidden rounded-[2.5rem] bg-gradient-to-br from-ink via-violet/90 to-electric p-8 text-white sm:p-10 relative"
+        >
+          <div className="absolute -right-20 -top-20 h-80 w-80 rounded-full bg-electric/20 blur-3xl" />
+          <div className="absolute -left-16 -bottom-16 h-60 w-60 rounded-full bg-violet/30 blur-3xl" />
+
+          <div className="relative z-10">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6">
+              <Avatar name={profile.full_name} size="xl" showStatus status="online" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <h1 className="font-display text-3xl font-bold sm:text-4xl truncate">{profile.full_name}</h1>
+                  <StatusDot status="online" />
+                </div>
+                <p className="mt-1.5 text-white/60 text-sm font-medium">@{profile.username} · {profile.email}</p>
+                <div className="mt-3 flex flex-wrap gap-4 items-center text-xs text-white/80">
+                  <span className="flex items-center gap-1">
+                    <MapPin size={14} className="text-cyan" /> {profile.location}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Star size={14} className="text-warmyellow fill-warmyellow" />
+                    <b>4.9 Rating</b> (12 reviews)
+                  </span>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => { setEditing(!editing); setMessage(''); }}
+                  className="border border-white/20 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm"
+                >
+                  {editing ? 'Cancel' : <><Edit3 size={16} /> Edit Profile</>}
+                </Button>
+                {!editing && (
+                  <Button className="bg-gradient-to-r from-cyan to-electric text-white hover:shadow-glow-blue">
+                    Propose Skill Swap
+                  </Button>
+                )}
               </div>
             </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setEditing(!editing);
-                setMessage('');
-              }}
-              className="mt-4 sm:mt-0 border border-white/20 bg-white/10 text-white hover:bg-white/20"
-            >
-              {editing ? 'Cancel' : <><Edit3 size={16} /> Edit Profile</>}
-            </Button>
+
+            {/* Quick Stats */}
+            <div className="mt-8 grid grid-cols-3 gap-4 rounded-2xl bg-white/10 backdrop-blur-sm p-4">
+              <div className="text-center">
+                <p className="text-2xl font-extrabold">12</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Exchanges</p>
+              </div>
+              <div className="text-center border-x border-white/20">
+                <p className="text-2xl font-extrabold">4.9</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Rating</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-extrabold">8</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">Skills</p>
+              </div>
+            </div>
           </div>
-        </div>
+        </motion.div>
 
         {message && (
-          <p className={`mt-5 flex items-center gap-2 rounded-2xl p-4 text-sm font-bold shadow-sm ${
-            message.includes('success') ? 'bg-mint/80 text-emerald-950' : 'bg-coral/20 text-ink'
-          }`}>
+          <motion.p
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className={`mt-5 flex items-center gap-2 rounded-2xl p-4 text-sm font-bold shadow-sm ${
+              message.includes('success') ? 'bg-emerald-50 text-emerald-800' : 'bg-coral/20 text-ink'
+            }`}
+          >
             <Check size={16} />
             {message}
-          </p>
+          </motion.p>
         )}
 
         <div className="mt-6 grid gap-6 lg:grid-cols-[1.3fr_.7fr]">
           {/* Main Column */}
           <div className="space-y-6">
-            {/* About You Section */}
-            <div className="rounded-[2rem] bg-white p-6 sm:p-8 shadow-sm border border-ink/5">
+            {/* About Section */}
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-card border border-ink/5">
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <p className="eyebrow text-ink/40">Your Story</p>
-                  <h2 className="mt-1 font-display text-3xl">About You</h2>
+                  <h2 className="mt-1 font-display text-2xl font-bold">About You</h2>
                 </div>
               </div>
 
@@ -199,19 +237,11 @@ export default function UserProfile() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Full Name
-                      <input
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="field mt-2"
-                      />
+                      <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="field mt-2" />
                     </label>
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Location
-                      <input
-                        value={location}
-                        onChange={(e) => setLocation(e.target.value)}
-                        className="field mt-2"
-                      />
+                      <input value={location} onChange={(e) => setLocation(e.target.value)} className="field mt-2" />
                     </label>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -219,21 +249,12 @@ export default function UserProfile() {
                       Phone Number
                       <div className="relative mt-2">
                         <Phone size={15} className="absolute left-3.5 top-3.5 text-ink/40" />
-                        <input
-                          value={phone}
-                          onChange={(e) => setPhone(e.target.value)}
-                          placeholder="e.g. +91 98765 43210"
-                          className="field pl-9"
-                        />
+                        <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="e.g. +91 98765 43210" className="field pl-9" />
                       </div>
                     </label>
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Primary Skill to Teach
-                      <select
-                        value={primarySkill}
-                        onChange={(e) => setPrimarySkill(e.target.value)}
-                        className="field mt-2"
-                      >
+                      <select value={primarySkill} onChange={(e) => setPrimarySkill(e.target.value)} className="field mt-2">
                         <option value="">Select an approved skill</option>
                         {approvedSkills.map((skill) => <option key={skill}>{skill}</option>)}
                       </select>
@@ -242,11 +263,7 @@ export default function UserProfile() {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Skill Level
-                      <select
-                        value={skillLevel}
-                        onChange={(e) => setSkillLevel(e.target.value)}
-                        className="field mt-2"
-                      >
+                      <select value={skillLevel} onChange={(e) => setSkillLevel(e.target.value)} className="field mt-2">
                         <option>Beginner</option>
                         <option>Intermediate</option>
                         <option>Advanced</option>
@@ -255,11 +272,7 @@ export default function UserProfile() {
                     </label>
                     <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50">
                       Learning Mode
-                      <select
-                        value={learningMode}
-                        onChange={(e) => setLearningMode(e.target.value)}
-                        className="field mt-2"
-                      >
+                      <select value={learningMode} onChange={(e) => setLearningMode(e.target.value)} className="field mt-2">
                         <option>Online</option>
                         <option>Offline</option>
                         <option>Both</option>
@@ -268,33 +281,24 @@ export default function UserProfile() {
                   </div>
                   <label className="text-xs font-extrabold uppercase tracking-wider text-ink/50 block">
                     Bio / Introduction
-                    <textarea
-                      value={bio}
-                      onChange={(e) => setBio(e.target.value)}
-                      className="field mt-2 min-h-24 resize-y leading-relaxed"
-                      maxLength={280}
-                    />
+                    <textarea value={bio} onChange={(e) => setBio(e.target.value)} className="field mt-2 min-h-24 resize-y leading-relaxed" maxLength={280} />
                   </label>
-                  <Button
-                    type="button"
-                    onClick={save}
-                    disabled={saving}
-                    className="bg-violet text-white hover:bg-ink mt-2"
-                  >
+                  <Button type="button" onClick={save} disabled={saving} className="bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow mt-2">
                     {saving ? 'Saving changes…' : <><Save size={16} /> Save Changes</>}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-6">
-                  <p className="text-sm leading-relaxed text-ink/75">{profile.bio || 'Add a friendly bio to introduce yourself to neighbors!'}</p>
-
+                  <p className="text-sm leading-relaxed text-ink/75">
+                    {profile.bio || 'Add a friendly bio to introduce yourself to the community!'}
+                  </p>
                   <div className="grid gap-4 sm:grid-cols-3 border-t border-ink/5 pt-5 text-sm">
                     <div>
                       <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Phone</span>
                       <p className="mt-1 font-bold text-ink/80">{profile.phone || 'Not provided'}</p>
                     </div>
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40">City</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Location</span>
                       <p className="mt-1 font-bold text-ink/80">{profile.location.split(',')[0]}</p>
                     </div>
                     <div>
@@ -306,65 +310,98 @@ export default function UserProfile() {
               )}
             </div>
 
-            {/* Courses Taught / Teaching History */}
-            <div className="rounded-[2rem] bg-white p-6 sm:p-8 shadow-sm border border-ink/5">
+            {/* Skills I Can Teach */}
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-card border border-ink/5">
+              <div className="flex items-center gap-2 mb-5">
+                <GraduationCap className="text-violet" size={22} />
+                <h2 className="font-display text-xl font-bold">Skills I Can Teach</h2>
+              </div>
+              {profile.primary_skill ? (
+                <div className="flex flex-wrap gap-2">
+                  <SkillTag skill={profile.primary_skill} size="md" />
+                  <span className="rounded-full bg-violet/10 px-3 py-2 text-xs font-bold text-violet">
+                    {profile.skill_level}
+                  </span>
+                </div>
+              ) : (
+                <p className="text-sm text-ink/45 italic">No teaching skill selected yet</p>
+              )}
+            </div>
+
+            {/* Skills I Want To Learn */}
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-card border border-ink/5">
+              <div className="flex items-center gap-2 mb-5">
+                <BookOpen className="text-electric" size={22} />
+                <h2 className="font-display text-xl font-bold">Skills I Want To Learn</h2>
+              </div>
+              {profile.learning_skills.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {profile.learning_skills.map((skill) => (
+                    <SkillTag key={skill} skill={skill} size="md" />
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-ink/45 italic">No learning skills selected yet</p>
+              )}
+            </div>
+
+            {/* Teaching History */}
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-card border border-ink/5">
               <div className="flex items-center gap-2 mb-6">
-                <GraduationCap className="text-violet" size={24} />
+                <GraduationCap className="text-violet" size={22} />
                 <div>
                   <p className="eyebrow text-ink/40">Teaching History</p>
-                  <h2 className="mt-0.5 font-display text-2xl">Classes You Led</h2>
+                  <h2 className="mt-0.5 font-display text-xl font-bold">Classes You Led</h2>
                 </div>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {mockTaughtHistory.map((course) => (
-                  <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-[#f7f5f2] border border-ink/5 gap-3">
+                  <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-surface border border-ink/5 gap-3">
                     <div>
-                      <h4 className="font-extrabold text-sm text-ink">{course.title}</h4>
+                      <h4 className="font-bold text-sm">{course.title}</h4>
                       <p className="text-xs text-ink/55 mt-1">Student: <b>{course.student}</b> · {course.date}</p>
                     </div>
                     <div className="flex items-center gap-1 text-xs">
-                      <Star size={13} className="text-amber-500 fill-amber-500" />
-                      <span className="font-bold">{course.reviews}</span> Rating received
+                      <Star size={13} className="text-warmyellow fill-warmyellow" />
+                      <span className="font-bold">{course.reviews}</span> Rating
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Courses Taken / Learning History */}
-            <div className="rounded-[2rem] bg-white p-6 sm:p-8 shadow-sm border border-ink/5">
+            {/* Learning History */}
+            <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-card border border-ink/5">
               <div className="flex items-center gap-2 mb-6">
-                <BookOpen className="text-violet" size={22} />
+                <BookOpen className="text-electric" size={22} />
                 <div>
                   <p className="eyebrow text-ink/40">Learning History</p>
-                  <h2 className="mt-0.5 font-display text-2xl">Lectures Enrolled In</h2>
+                  <h2 className="mt-0.5 font-display text-xl font-bold">Lectures Enrolled In</h2>
                 </div>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {mockLearnedHistory.map((course) => (
-                  <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-mint/10 border border-emerald-100 gap-3">
+                  <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 gap-3">
                     <div>
-                      <h4 className="font-extrabold text-sm text-ink">{course.title}</h4>
+                      <h4 className="font-bold text-sm">{course.title}</h4>
                       <p className="text-xs text-ink/55 mt-1">Instructor: <b>{course.instructor}</b> · {course.date}</p>
                     </div>
-                    <div>
-                      <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                        course.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-violet/10 text-violet'
-                      }`}>
-                        {course.status}
-                      </span>
-                    </div>
+                    <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                      course.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-violet/10 text-violet'
+                    }`}>
+                      {course.status}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Right Column (Skills & Meta) */}
+          {/* Right Column */}
           <div className="space-y-6">
-            {/* Rating Details Card */}
-            <div className="rounded-[2rem] bg-gradient-to-br from-violet to-[#a99eff] p-6 text-white shadow-sm relative overflow-hidden">
-              <Award className="absolute -right-6 -bottom-6 text-white/10 shrink-0" size={130} />
+            {/* Rating Card */}
+            <div className="rounded-3xl bg-gradient-to-br from-violet to-electric p-6 text-white shadow-card relative overflow-hidden">
+              <Award className="absolute -right-4 -bottom-4 text-white/10" size={100} />
               <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Community Rating</p>
               <div className="mt-3 flex items-baseline gap-2">
                 <span className="text-5xl font-black">4.9</span>
@@ -372,39 +409,37 @@ export default function UserProfile() {
               </div>
               <div className="mt-3 flex items-center gap-1">
                 {Array.from({ length: 5 }).map((_, i) => (
-                  <Star key={i} size={15} className="fill-amber-400 text-amber-400" />
+                  <Star key={i} size={15} className="fill-warmyellow text-warmyellow" />
                 ))}
               </div>
-              <p className="mt-6 text-xs text-white/80 leading-relaxed font-medium">
-                Excellent rating based on 12 teaching and learning exchanges in Patan. Neighbors appreciate promptness and clear instructions.
+              <p className="mt-5 text-xs text-white/70 leading-relaxed">
+                Excellent rating based on 12 teaching and learning exchanges. Neighbors appreciate promptness and clear instructions.
               </p>
             </div>
 
             {/* Skills Card */}
-            <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-ink/5">
+            <div className="rounded-3xl bg-white p-6 shadow-card border border-ink/5">
               <p className="eyebrow text-ink/40">Skills Profile</p>
-              
+
               <div className="mt-4">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Teaches</span>
-                <div className="mt-2 p-3.5 rounded-2xl bg-[#f7f5f2] border border-ink/5">
-                  <p className="font-extrabold text-sm text-ink">{profile.primary_skill || 'No primary skill selected'}</p>
+                <div className="mt-2 p-3.5 rounded-2xl bg-surface border border-ink/5">
+                  <p className="font-bold text-sm">{profile.primary_skill || 'No primary skill selected'}</p>
                   <span className="mt-1 inline-block text-[10px] font-bold uppercase tracking-wider bg-violet/10 text-violet px-2.5 py-0.5 rounded-full">
                     {profile.skill_level}
                   </span>
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-5">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Wants to Learn</span>
                 <div className="mt-2.5 flex flex-wrap gap-2">
                   {profile.learning_skills.length > 0 ? (
                     profile.learning_skills.map((skill) => (
-                      <span key={skill} className="text-xs font-bold bg-mint text-emerald-950 px-3 py-1.5 rounded-full">
-                        {skill}
-                      </span>
+                      <SkillTag key={skill} skill={skill} />
                     ))
                   ) : (
-                    <span className="text-xs text-ink/45 font-medium italic">No learning skills selected</span>
+                    <span className="text-xs text-ink/45 italic">No learning skills selected</span>
                   )}
                 </div>
               </div>
@@ -412,8 +447,27 @@ export default function UserProfile() {
 
             <SkillRequestPanel member={{ id: profile.id, name: profile.full_name, email: profile.email }} />
 
-            {/* Settings & Availability Card */}
-            <div className="rounded-[2rem] bg-white p-6 shadow-sm border border-ink/5 text-sm space-y-4">
+            {/* Availability */}
+            <div className="rounded-3xl bg-white p-6 shadow-card border border-ink/5">
+              <div className="flex items-center gap-2 mb-4">
+                <Calendar size={16} className="text-violet" />
+                <p className="font-bold text-sm">Availability</p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {profile.availability.length > 0 ? (
+                  profile.availability.map((day) => (
+                    <span key={day} className="text-[10px] font-bold uppercase tracking-wider bg-surface text-ink/65 px-2.5 py-1 rounded-full border border-ink/5">
+                      {day}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-ink/45 italic">No availability set</span>
+                )}
+              </div>
+            </div>
+
+            {/* Exchange Preferences */}
+            <div className="rounded-3xl bg-white p-6 shadow-card border border-ink/5 text-sm space-y-4">
               <p className="eyebrow text-ink/40">Preferences</p>
 
               <div>
@@ -421,19 +475,19 @@ export default function UserProfile() {
                 <span className="mt-1 font-bold block text-ink/80">{profile.learning_mode} Learning</span>
               </div>
 
-              <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-ink/40 block">General Availability</span>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {profile.availability.length > 0 ? (
-                    profile.availability.map((day) => (
-                      <span key={day} className="text-[10px] font-bold uppercase tracking-wider bg-[#f7f5f2] text-ink/65 px-2.5 py-1 rounded-full border border-ink/5">
-                        {day}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-xs text-ink/45 font-medium italic">No availability set</span>
-                  )}
-                </div>
+              <div className="flex gap-2">
+                {['Online', 'Offline'].map((mode) => (
+                  <span
+                    key={mode}
+                    className={`rounded-full px-3 py-1.5 text-xs font-bold ${
+                      profile.learning_mode === mode || profile.learning_mode === 'Both'
+                        ? 'bg-violet/10 text-violet'
+                        : 'bg-surface text-ink/30'
+                    }`}
+                  >
+                    {mode === 'Online' ? '🖥️' : '🤝'} {mode}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
