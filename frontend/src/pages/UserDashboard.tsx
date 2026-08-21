@@ -4,6 +4,7 @@ import {
   BookOpen,
   Compass,
   Gift,
+  GraduationCap,
   Home,
   Layers,
   MapPin,
@@ -15,12 +16,17 @@ import {
   Users,
   User,
   ArrowRightLeft,
+  Award,
+  ChevronRight,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { api } from '../utils/api';
 import { Avatar, Button, ExchangeVis, MatchScore, SkillTag, StatCard, StatusDot } from '../components/ui/Primitives';
+import { ProgressBar } from '../components/ui/ProgressBar';
+import { StatusBadge } from '../components/ui/StatusBadge';
 import LiveFeed from '../components/LiveFeed';
 import Navbar from '../components/Navbar';
+import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
 
 const nearby = [
   { name: 'Meera Iyer', skill: 'Conversational Spanish', distance: '0.8 km away', category: 'Language', online: true, match: 92 },
@@ -35,16 +41,22 @@ const currentExchanges = [
 
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
+  { to: '/learning', icon: BookOpen, label: 'My Learning' },
+  { to: '/teaching', icon: GraduationCap, label: 'My Teaching' },
   { to: '/profile', icon: User, label: 'My Profile' },
   { to: '/explore', icon: Compass, label: 'Find Matches' },
   { to: '/exchanges', icon: ArrowRightLeft, label: 'My Exchanges' },
   { to: '/messages', icon: MessageCircle, label: 'Messages' },
+  { to: '/certificates', icon: Award, label: 'Certificates' },
   { to: '/community', icon: Users, label: 'Community' },
 ];
 
 export default function UserDashboard() {
   const nav = useNavigate();
   const [profile, setProfile] = useState<{ full_name: string; location: string; email: string } | null>(null);
+  const store = useLearningStore();
+  const myLearning = store.getMyLearning(CURRENT_USER_ID).slice(0, 2);
+  const myTeaching = store.getMyTeachingCourses(CURRENT_USER_ID).slice(0, 2);
 
   useEffect(() => {
     const getProfile = async () => {
@@ -277,6 +289,91 @@ export default function UserDashboard() {
                 <LiveFeed compact />
               </div>
             </div>
+
+            {/* My Learning Section */}
+            <section>
+              <div className="mb-4 flex items-end justify-between">
+                <div>
+                  <p className="eyebrow">Learning</p>
+                  <h2 className="mt-1 font-display text-2xl font-bold">My Learning</h2>
+                </div>
+                <Link to="/learning" className="text-sm font-bold text-violet hover:text-ink transition">View all →</Link>
+              </div>
+              {myLearning.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {myLearning.map(enrollment => {
+                    const course = mockCourses.find(c => c.id === enrollment.courseId);
+                    if (!course) return null;
+                    return (
+                      <div
+                        key={enrollment.id}
+                        onClick={() => nav(`/learning/${course.id}`)}
+                        className="rounded-3xl bg-white p-5 shadow-card border border-ink/5 hover-lift cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet/10 to-electric/10 text-xl">{course.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{course.skillName}</p>
+                            <p className="text-xs text-ink/40">from {course.teacherName}</p>
+                          </div>
+                          <StatusBadge status={enrollment.examStatus} />
+                        </div>
+                        <ProgressBar value={enrollment.lecturesCompleted} max={course.totalLectures} size="sm" />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-3xl bg-white p-8 text-center text-ink/40 shadow-card border border-ink/5">
+                  <BookOpen size={28} className="mx-auto mb-2" />
+                  <p className="text-sm font-bold">No courses yet</p>
+                  <Link to="/explore" className="mt-2 text-xs font-bold text-violet">Explore skills →</Link>
+                </div>
+              )}
+            </section>
+
+            {/* My Teaching Section */}
+            <section>
+              <div className="mb-4 flex items-end justify-between">
+                <div>
+                  <p className="eyebrow">Teaching</p>
+                  <h2 className="mt-1 font-display text-2xl font-bold">My Teaching</h2>
+                </div>
+                <Link to="/teaching" className="text-sm font-bold text-violet hover:text-ink transition">View all →</Link>
+              </div>
+              {myTeaching.length > 0 ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  {myTeaching.map(course => {
+                    const enrollments = store.getCourseEnrollments(course.id);
+                    return (
+                      <div
+                        key={course.id}
+                        onClick={() => nav(`/teaching/${course.id}`)}
+                        className="rounded-3xl bg-white p-5 shadow-card border border-ink/5 hover-lift cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3 mb-3">
+                          <span className="grid h-10 w-10 place-items-center rounded-xl bg-gradient-to-br from-violet to-electric text-xl text-white">{course.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{course.skillName}</p>
+                            <p className="text-xs text-ink/40">You are teaching</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4 text-xs text-ink/50">
+                          <span className="flex items-center gap-1"><Users size={12} /> {enrollments.length} learners</span>
+                          <span className="flex items-center gap-1"><BookOpen size={12} /> {course.totalLectures} lectures</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="rounded-3xl bg-white p-8 text-center text-ink/40 shadow-card border border-ink/5">
+                  <GraduationCap size={28} className="mx-auto mb-2" />
+                  <p className="text-sm font-bold">Not teaching yet</p>
+                  <Link to="/profile" className="mt-2 text-xs font-bold text-violet">Create a course →</Link>
+                </div>
+              )}
+            </section>
           </div>
         </div>
       </div>

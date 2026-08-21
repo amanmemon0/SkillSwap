@@ -23,10 +23,11 @@ const publicLinks: NavLinkItem[] = [
 /* Authenticated nav links */
 const authLinks: NavLinkItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/learning', label: 'My Learning' },
+  { to: '/teaching', label: 'My Teaching' },
   { to: '/explore', label: 'Explore' },
-  { to: '/exchanges', label: 'My Exchanges' },
+  { to: '/certificates', label: 'Certificates' },
   { to: '/messages', label: 'Messages' },
-  { to: '/community', label: 'Community' },
 ];
 
 export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'auth' | 'auto' }) {

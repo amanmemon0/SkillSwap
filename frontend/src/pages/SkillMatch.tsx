@@ -7,7 +7,7 @@ import { Avatar, Button, MatchScore, SkillTag } from '../components/ui/Primitive
 export default function SkillMatch() {
   return (
     <main className="min-h-screen bg-surface text-ink">
-      <Navbar variant="public" />
+      <Navbar />
 
       <section className="section-container py-12">
         {/* Header */}

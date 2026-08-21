@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
-import { Award, BookOpen, Calendar, Check, Clock, Edit3, GraduationCap, MapPin, Phone, Save, Star, User } from 'lucide-react';
+import { Award, BookOpen, Calendar, Check, Clock, Edit3, GraduationCap, MapPin, Phone, Save, Star, User, ChevronRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import { Avatar, Button, SkillTag, StatusDot } from '../components/ui/Primitives';
+import { ProgressBar } from '../components/ui/ProgressBar';
 import Navbar from '../components/Navbar';
 import { SkillRequestPanel } from '../features/skill-management/SkillManagement';
 import { skillManagementApi } from '../features/skill-management/api';
+import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
 
 type Profile = {
   id: string;
@@ -38,6 +41,10 @@ export default function UserProfile() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
+  const nav = useNavigate();
+  const store = useLearningStore();
+  const myTeachingCourses = store.getMyTeachingCourses(CURRENT_USER_ID);
+  const myLearning = store.getMyLearning(CURRENT_USER_ID);
 
   // Form states for editing
   const [fullName, setFullName] = useState('');
@@ -489,6 +496,77 @@ export default function UserProfile() {
                   </span>
                 ))}
               </div>
+            </div>
+
+            {/* Skills I Teach */}
+            <div className="rounded-3xl bg-white p-6 shadow-card border border-ink/5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <GraduationCap size={16} className="text-violet" />
+                  <p className="font-bold text-sm">Skills I Teach</p>
+                </div>
+                <button onClick={() => nav('/teaching')} className="text-xs font-bold text-violet hover:text-ink transition">View all →</button>
+              </div>
+              {myTeachingCourses.length > 0 ? (
+                <div className="space-y-2">
+                  {myTeachingCourses.map(course => {
+                    const enrollments = store.getCourseEnrollments(course.id);
+                    return (
+                      <div
+                        key={course.id}
+                        onClick={() => nav(`/teaching/${course.id}`)}
+                        className="flex items-center gap-3 rounded-xl bg-surface p-3 hover:bg-violet/5 transition cursor-pointer"
+                      >
+                        <span className="text-xl">{course.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate">{course.skillName}</p>
+                          <p className="text-xs text-ink/40">{enrollments.length} learners</p>
+                        </div>
+                        <ChevronRight size={14} className="text-ink/25" />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-ink/40 italic">Not teaching any courses yet</p>
+              )}
+            </div>
+
+            {/* Skills I'm Learning */}
+            <div className="rounded-3xl bg-white p-6 shadow-card border border-ink/5">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <BookOpen size={16} className="text-electric" />
+                  <p className="font-bold text-sm">Skills I'm Learning</p>
+                </div>
+                <button onClick={() => nav('/learning')} className="text-xs font-bold text-violet hover:text-ink transition">View all →</button>
+              </div>
+              {myLearning.length > 0 ? (
+                <div className="space-y-2">
+                  {myLearning.map(enrollment => {
+                    const course = mockCourses.find(c => c.id === enrollment.courseId);
+                    if (!course) return null;
+                    return (
+                      <div
+                        key={enrollment.id}
+                        onClick={() => nav(`/learning/${course.id}`)}
+                        className="flex items-center gap-3 rounded-xl bg-surface p-3 hover:bg-violet/5 transition cursor-pointer"
+                      >
+                        <span className="text-xl">{course.icon}</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold truncate">{course.skillName}</p>
+                          <p className="text-xs text-ink/40">from {course.teacherName}</p>
+                        </div>
+                        <div className="w-16">
+                          <ProgressBar value={enrollment.lecturesCompleted} max={course.totalLectures} size="sm" showLabel={false} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-ink/40 italic">Not enrolled in any courses yet</p>
+              )}
             </div>
           </div>
         </div>

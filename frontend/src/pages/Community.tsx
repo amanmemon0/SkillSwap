@@ -36,7 +36,7 @@ export default function Community() {
 
   return (
     <main className="min-h-screen bg-surface text-ink">
-      <Navbar variant="public" />
+      <Navbar />
 
       <section className="section-container py-10">
         {/* Header */}

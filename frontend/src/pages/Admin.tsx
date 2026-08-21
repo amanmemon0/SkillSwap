@@ -18,11 +18,17 @@ import {
   UserCheck,
   Users,
   X,
+  Award,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, Button } from "../components/ui/Primitives";
 import { api } from "../utils/api";
 import { SkillApprovalQueue } from "../features/skill-management/SkillManagement";
+import { useLearningStore } from "../data/learningMockData";
+import { StatusBadge } from "../components/ui/StatusBadge";
 
 type Status = "Active" | "Pending" | "Suspended" | "Banned";
 type Role = "User" | "Admin";
@@ -252,6 +258,8 @@ export default function Admin() {
   } | null>(null);
   const [notice, setNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adminTab, setAdminTab] = useState<'users' | 'certificates'>('users');
+  const store = useLearningStore();
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -363,9 +371,24 @@ export default function Admin() {
         <p className="mt-12 px-3 text-[10px] font-bold uppercase tracking-[.2em] text-white/40">
           Workspace
         </p>
-        <button className="mt-3 flex w-full items-center gap-3 rounded-xl bg-white px-3 py-3 text-left text-sm font-bold text-ink">
+        <button
+          onClick={() => setAdminTab('users')}
+          className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'users' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
           <Users size={18} />
           User Management
+        </button>
+        <button
+          onClick={() => setAdminTab('certificates')}
+          className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'certificates' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
+          <Award size={18} />
+          Certificates
+          {store.certificateRequests.filter(r => r.adminApproval === 'pending' && r.tutorApproval === 'approved').length > 0 && (
+            <span className="ml-auto rounded-full bg-violet px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+              {store.certificateRequests.filter(r => r.adminApproval === 'pending' && r.tutorApproval === 'approved').length}
+            </span>
+          )}
         </button>
         <button
           onClick={() => {
@@ -424,6 +447,8 @@ export default function Admin() {
           <div className="mb-6">
             <SkillApprovalQueue />
           </div>
+          {adminTab === 'users' ? (
+          <>
           <div className="rounded-3xl border bg-white p-4 shadow-sm">
             <div className="grid gap-3 xl:grid-cols-[1fr_repeat(4,auto)]">
               <label className="relative">
@@ -635,7 +660,7 @@ export default function Admin() {
                           </span>
                         </td>
                         <td className="p-4">
-                          <StatusBadge status={user.status} />
+                          <UserStatusBadge status={user.status} />
                         </td>
                         <td className="p-4 text-sm font-bold">
                           ★ {user.rating.toFixed(1)}
@@ -730,6 +755,95 @@ export default function Admin() {
               </div>
             </div>
           </section>
+          </>
+          ) : (
+          /* ═══════════════ Certificate Management ═══════════════ */
+          <section className="rounded-3xl border bg-white shadow-sm overflow-hidden">
+            <div className="p-5 border-b">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="eyebrow">Admin workspace / certificates</p>
+                  <h2 className="mt-1 font-display text-2xl">Certificate Requests</h2>
+                  <p className="mt-1 text-xs text-ink/50">
+                    Review and approve certificate requests from across SkillSwap
+                  </p>
+                </div>
+                <span className="text-sm font-bold text-ink/40">
+                  {store.certificateRequests.length} total requests
+                </span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left">
+                <thead className="border-b bg-[#fcfbfa] text-[10px] uppercase tracking-wider text-ink/45">
+                  <tr>
+                    {['Learner', 'Course', 'Teacher', 'Exam Score', 'Tutor Approval', 'Admin Status', 'Actions'].map(title => (
+                      <th key={title} className="whitespace-nowrap p-4 font-bold">{title}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {store.certificateRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="p-12 text-center">
+                        <Award className="mx-auto text-ink/15" size={32} />
+                        <p className="mt-2 font-bold text-ink/40">No certificate requests</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    store.certificateRequests.map(req => (
+                      <tr key={req.id} className="group transition hover:bg-violet/[.02]">
+                        <td className="p-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={req.learnerName} />
+                            <span className="text-sm font-bold">{req.learnerName}</span>
+                          </div>
+                        </td>
+                        <td className="p-4 text-sm font-medium">{req.courseName}</td>
+                        <td className="p-4 text-sm text-ink/60">{req.teacherName}</td>
+                        <td className="p-4 text-sm font-bold">{req.examScore}%</td>
+                        <td className="p-4">
+                          <StatusBadge status={req.tutorApproval} />
+                        </td>
+                        <td className="p-4">
+                          <StatusBadge status={req.adminApproval} />
+                        </td>
+                        <td className="p-4">
+                          {req.tutorApproval === 'approved' && req.adminApproval === 'pending' ? (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => { store.approveCertificateAdmin(req.id); setNotice(`Certificate approved for ${req.learnerName}`); }}
+                                title="Approve"
+                                className="rounded-lg bg-emerald-100 p-2 text-emerald-700 hover:bg-emerald-200 transition"
+                              >
+                                <CheckCircle2 size={16} />
+                              </button>
+                              <button
+                                onClick={() => { store.rejectCertificateAdmin(req.id); setNotice(`Certificate rejected for ${req.learnerName}`); }}
+                                title="Reject"
+                                className="rounded-lg bg-rose-100 p-2 text-rose-700 hover:bg-rose-200 transition"
+                              >
+                                <XCircle size={16} />
+                              </button>
+                            </div>
+                          ) : req.status === 'generated' ? (
+                            <span className="text-xs font-bold text-emerald-600">✓ Generated</span>
+                          ) : req.adminApproval === 'approved' ? (
+                            <span className="text-xs font-bold text-blue-600">Approved</span>
+                          ) : req.tutorApproval === 'pending' ? (
+                            <span className="flex items-center gap-1 text-xs text-ink/40"><Clock size={12} /> Awaiting tutor</span>
+                          ) : req.adminApproval === 'rejected' ? (
+                            <span className="text-xs font-bold text-rose-600">Rejected</span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </section>
+          )}
         </section>
       </main>
       {drawer && (
@@ -789,7 +903,7 @@ function Select({
     </label>
   );
 }
-function StatusBadge({ status }: { status: Status }) {
+function UserStatusBadge({ status }: { status: Status }) {
   return (
     <span
       className={`rounded-full px-2.5 py-1 text-xs font-bold ${badge[status]}`}
@@ -834,7 +948,7 @@ function UserDrawer({
             <div>
               <h2 className="font-display text-3xl">{user.fullName}</h2>
               <p className="text-sm text-ink/55">
-                @{user.username} · <StatusBadge status={user.status} />
+                @{user.username} · <UserStatusBadge status={user.status} />
               </p>
             </div>
           </div>

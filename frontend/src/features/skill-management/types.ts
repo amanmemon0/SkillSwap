@@ -21,6 +21,8 @@ export interface SkillManagementApi {
   getCategories(): Promise<SkillCategory[]>;
   getMyRequests(memberId: string): Promise<SkillRequest[]>;
   requestCustomSkill(input: { skillName: string; categoryId?: string; requester: NonNullable<SkillRequest["requester"]> }): Promise<SkillRequest>;
+  updateRequest(id: string, input: { skillName: string; categoryId?: string }): Promise<SkillRequest>;
+  revokeRequest(id: string): Promise<void>;
   getPendingRequests(): Promise<SkillRequest[]>;
   reviewRequest(id: string, decision: "approved" | "rejected", reviewerNote?: string): Promise<SkillRequest>;
 }

@@ -31,7 +31,7 @@ export default function ExploreSkills() {
 
   return (
     <main className="min-h-screen bg-surface text-ink">
-      <Navbar variant="public" />
+      <Navbar />
 
       {/* Header */}
       <section className="section-container pt-8 pb-6">

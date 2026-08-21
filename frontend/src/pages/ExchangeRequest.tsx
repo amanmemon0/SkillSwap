@@ -22,7 +22,7 @@ export default function ExchangeRequest() {
   if (submitted) {
     return (
       <main className="min-h-screen bg-surface text-ink">
-        <Navbar variant="public" />
+        <Navbar />
         <section className="section-container py-20">
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
@@ -56,7 +56,7 @@ export default function ExchangeRequest() {
 
   return (
     <main className="min-h-screen bg-surface text-ink">
-      <Navbar variant="public" />
+      <Navbar />
 
       <section className="section-container py-10">
         <Link to="/match" className="inline-flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition mb-6">
