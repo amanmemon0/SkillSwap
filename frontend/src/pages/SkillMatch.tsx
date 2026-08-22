@@ -1,10 +1,45 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowRight, ArrowRightLeft, MapPin, MessageCircle, Star, UserCheck } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, MatchScore, SkillTag } from '../components/ui/Primitives';
+import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
 
 export default function SkillMatch() {
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [matchedUser, setMatchedUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const me = await api.getMe();
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', me._id)
+          .single();
+        
+        setCurrentUser(myProfile);
+
+        // Fetch another user
+        const { data: dbMatched } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', me._id)
+          .limit(1);
+        
+        if (dbMatched && dbMatched.length > 0) {
+          setMatchedUser(dbMatched[0]);
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchUsers();
+  }, []);
+
   return (
     <main className="min-h-screen bg-surface text-ink">
       <Navbar />
@@ -38,8 +73,8 @@ export default function SkillMatch() {
           <div className="rounded-[2.5rem] bg-white p-8 sm:p-10 shadow-float border border-ink/5">
             {/* Match Score */}
             <div className="text-center mb-8">
-              <MatchScore score={92} size={80} />
-              <p className="mt-3 font-display text-lg font-bold">92% Match</p>
+              <MatchScore score={matchedUser ? (matchedUser.rating ? Math.round(Number(matchedUser.rating) * 20) : 92) : 92} size={80} />
+              <p className="mt-3 font-display text-lg font-bold">{matchedUser ? (matchedUser.rating ? Math.round(Number(matchedUser.rating) * 20) : 92) : 92}% Match</p>
               <p className="text-xs text-ink/50">Excellent compatibility</p>
             </div>
 
@@ -49,11 +84,11 @@ export default function SkillMatch() {
               <div className="rounded-3xl bg-gradient-card p-6 text-center border border-violet/10">
                 <p className="eyebrow text-violet/60">You</p>
                 <div className="mt-4 mx-auto">
-                  <Avatar name="Aarav" size="xl" showStatus status="online" />
+                  <Avatar name={currentUser?.full_name || 'Member'} size="xl" showStatus status="online" />
                 </div>
-                <h3 className="mt-3 font-display text-xl font-bold">Aarav Sharma</h3>
+                <h3 className="mt-3 font-display text-xl font-bold">{currentUser?.full_name || 'Member'}</h3>
                 <p className="mt-1 flex items-center justify-center gap-1 text-xs text-ink/50">
-                  <MapPin size={11} /> Ahmedabad
+                  <MapPin size={11} /> {currentUser?.location || 'Nearby'}
                 </p>
 
                 <div className="mt-5 rounded-2xl bg-white p-4">
@@ -61,9 +96,9 @@ export default function SkillMatch() {
                   <div className="mt-3 flex justify-center">
                     <span className="text-3xl">💻</span>
                   </div>
-                  <p className="mt-2 font-bold">Web Development</p>
+                  <p className="mt-2 font-bold">{currentUser?.primary_skill || 'Skills'}</p>
                   <div className="mt-2">
-                    <SkillTag skill="Web Development" />
+                    <SkillTag skill={currentUser?.primary_skill || 'Skills'} />
                   </div>
                 </div>
 
@@ -72,13 +107,13 @@ export default function SkillMatch() {
                   <div className="mt-3 flex justify-center">
                     <span className="text-3xl">🎸</span>
                   </div>
-                  <p className="mt-2 font-bold">Guitar</p>
+                  <p className="mt-2 font-bold">{Array.isArray(currentUser?.learning_skills) && currentUser.learning_skills[0] ? currentUser.learning_skills[0] : 'Guitar'}</p>
                 </div>
 
                 <div className="mt-4 flex items-center justify-center gap-1 text-xs">
                   <Star size={12} className="text-warmyellow fill-warmyellow" />
-                  <span className="font-bold">4.8</span>
-                  <span className="text-ink/40">· 12 exchanges</span>
+                  <span className="font-bold">{currentUser?.rating ? Number(currentUser.rating).toFixed(1) : '4.8'}</span>
+                  <span className="text-ink/40">· {currentUser?.completed_swaps || 12} exchanges</span>
                 </div>
               </div>
 
@@ -98,11 +133,11 @@ export default function SkillMatch() {
               <div className="rounded-3xl bg-gradient-card p-6 text-center border border-electric/10">
                 <p className="eyebrow text-electric/60">Matched</p>
                 <div className="mt-4 mx-auto">
-                  <Avatar name="Riya Patel" size="xl" showStatus status="online" />
+                  <Avatar name={matchedUser?.full_name || 'Member'} size="xl" showStatus status="online" />
                 </div>
-                <h3 className="mt-3 font-display text-xl font-bold">Riya Patel</h3>
+                <h3 className="mt-3 font-display text-xl font-bold">{matchedUser?.full_name || 'Member'}</h3>
                 <p className="mt-1 flex items-center justify-center gap-1 text-xs text-ink/50">
-                  <MapPin size={11} /> Mumbai · 1.2 km away
+                  <MapPin size={11} /> {matchedUser?.location || 'Nearby'} · 1.2 km away
                 </p>
 
                 <div className="mt-5 rounded-2xl bg-white p-4">
@@ -110,9 +145,9 @@ export default function SkillMatch() {
                   <div className="mt-3 flex justify-center">
                     <span className="text-3xl">🎸</span>
                   </div>
-                  <p className="mt-2 font-bold">Guitar</p>
+                  <p className="mt-2 font-bold">{matchedUser?.primary_skill || 'Skills'}</p>
                   <div className="mt-2">
-                    <SkillTag skill="Guitar" />
+                    <SkillTag skill={matchedUser?.primary_skill || 'Skills'} />
                   </div>
                 </div>
 
@@ -121,13 +156,13 @@ export default function SkillMatch() {
                   <div className="mt-3 flex justify-center">
                     <span className="text-3xl">💻</span>
                   </div>
-                  <p className="mt-2 font-bold">Web Development</p>
+                  <p className="mt-2 font-bold">{Array.isArray(matchedUser?.learning_skills) && matchedUser.learning_skills[0] ? matchedUser.learning_skills[0] : 'Web Development'}</p>
                 </div>
 
                 <div className="mt-4 flex items-center justify-center gap-1 text-xs">
                   <Star size={12} className="text-warmyellow fill-warmyellow" />
-                  <span className="font-bold">4.9</span>
-                  <span className="text-ink/40">· 8 exchanges</span>
+                  <span className="font-bold">{matchedUser?.rating ? Number(matchedUser.rating).toFixed(1) : '4.9'}</span>
+                  <span className="text-ink/40">· {matchedUser?.completed_swaps || 8} exchanges</span>
                 </div>
               </div>
             </div>

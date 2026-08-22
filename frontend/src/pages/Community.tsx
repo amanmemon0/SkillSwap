@@ -1,37 +1,83 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Heart, MessageCircle, Send, UserPlus } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, LiveBadge, SkillTag, StatusDot } from '../components/ui/Primitives';
 import LiveFeed from '../components/LiveFeed';
-import { communityPosts, featuredSwappers } from '../data/mock';
+import { featuredSwappers } from '../data/mock';
+import { supabase } from '../auth/supabaseClient';
 
 export default function Community() {
-  const [posts, setPosts] = useState(communityPosts);
+  const [posts, setPosts] = useState<any[]>([]);
   const [newPost, setNewPost] = useState('');
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const handleLike = (id: number) => {
-    setPosts((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, likes: p.likes + 1 } : p))
-    );
+  useEffect(() => {
+    const fetchUserId = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserId(session.user.id);
+      }
+    };
+    fetchUserId();
+  }, []);
+
+  const fetchPosts = async () => {
+    try {
+      const { data: dbPosts } = await supabase
+        .from('community_posts')
+        .select(`
+          *,
+          profiles:author_id (full_name)
+        `)
+        .order('created_at', { ascending: false });
+
+      const mapped = (dbPosts || []).map(p => ({
+        id: p.id,
+        user: p.profiles?.full_name || 'Member',
+        avatar: p.profiles?.full_name ? p.profiles.full_name.charAt(0) : 'M',
+        time: new Date(p.created_at).toLocaleDateString(),
+        content: p.content,
+        likes: p.likes_count || 0,
+        comments: 0
+      }));
+      setPosts(mapped);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  const handlePost = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const handleLike = async (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (!post) return;
+    try {
+      await supabase
+        .from('community_posts')
+        .update({ likes_count: (post.likes || 0) + 1 })
+        .eq('id', postId);
+      await fetchPosts();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handlePost = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPost.trim()) return;
-    setPosts((prev) => [
-      {
-        id: Date.now(),
-        user: 'You',
-        avatar: 'Y',
-        time: 'Just now',
-        content: newPost,
-        likes: 0,
-        comments: 0,
-      },
-      ...prev,
-    ]);
-    setNewPost('');
+    if (!newPost.trim() || !userId) return;
+    try {
+      await supabase.from('community_posts').insert({
+        author_id: userId,
+        content: newPost.trim()
+      });
+      setNewPost('');
+      await fetchPosts();
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (

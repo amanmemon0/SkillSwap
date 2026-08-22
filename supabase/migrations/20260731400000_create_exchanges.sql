@@ -18,6 +18,8 @@ create table if not exists public.exchanges (
   receiver_skill_id uuid references public.skills(id) on delete set null,
   sender_skill_name text not null,
   receiver_skill_name text not null,
+  sender_email text,
+  receiver_email text,
   status text not null default 'pending' check (status in ('pending', 'matched', 'completed', 'sender_cancelled', 'receiver_declined')),
   message text,
   created_at timestamptz not null default now(),

@@ -26,19 +26,8 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import LiveFeed from '../components/LiveFeed';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
-
-const nearby = [
-  { name: 'Meera Iyer', skill: 'Conversational Spanish', distance: '0.8 km away', category: 'Language', online: true, match: 92 },
-  { name: 'Rohan Kapoor', skill: 'Street Photography', distance: '1.3 km away', category: 'Creative', online: true, match: 87 },
-  { name: 'Tara Singh', skill: 'Excel for Business', distance: '2.1 km away', category: 'Business', online: false, match: 78 },
-];
-
-const currentExchanges = [
-  { id: '1', partner: 'Meera Iyer', teach: 'React Basics', learn: 'Spanish', status: 'Scheduled', progress: 60 },
-  { id: '2', partner: 'Rohan Kapoor', teach: 'UI/UX Design', learn: 'Photography', status: 'Requested', progress: 20 },
-];
-
+import { useLearningStore, mockCourses } from '../data/learningMockData';
+import { supabase } from '../auth/supabaseClient';
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
   { to: '/learning', icon: BookOpen, label: 'My Learning' },
@@ -54,14 +43,25 @@ const sideLinks = [
 export default function UserDashboard() {
   const nav = useNavigate();
   const [profile, setProfile] = useState<{ full_name: string; location: string; email: string } | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [exchanges, setExchanges] = useState<any[]>([]);
+  const [nearbyUsers, setNearbyUsers] = useState<any[]>([]);
+  const [profileMetrics, setProfileMetrics] = useState({
+    skillsOffered: 0,
+    skillsWanted: 0,
+    activeExchanges: 0,
+    completedSwaps: 0
+  });
+
   const store = useLearningStore();
-  const myLearning = store.getMyLearning(CURRENT_USER_ID).slice(0, 2);
-  const myTeaching = store.getMyTeachingCourses(CURRENT_USER_ID).slice(0, 2);
+  const myLearning = store.getMyLearning(userId || '').slice(0, 2);
+  const myTeaching = store.getMyTeachingCourses(userId || '').slice(0, 2);
 
   useEffect(() => {
     const getProfile = async () => {
       try {
         const user = await api.getMe();
+        setUserId(user._id);
         setProfile({
           full_name: user.name,
           location: user.location,
@@ -73,6 +73,95 @@ export default function UserDashboard() {
     };
     getProfile();
   }, []);
+
+  useEffect(() => {
+    if (!userId) return;
+    const fetchExchanges = async () => {
+      try {
+        const { data: dbExchanges } = await supabase
+          .from('exchanges')
+          .select(`
+            *,
+            sender:sender_id (full_name),
+            receiver:receiver_id (full_name)
+          `)
+          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+        
+        const mapped = (dbExchanges || []).map(ex => {
+          const isSender = ex.sender_id === userId;
+          const partnerName = isSender ? ex.receiver?.full_name : ex.sender?.full_name;
+          return {
+            id: ex.id,
+            partner: partnerName || 'Neighbour',
+            teach: isSender ? ex.sender_skill_name : ex.receiver_skill_name,
+            learn: isSender ? ex.receiver_skill_name : ex.sender_skill_name,
+            status: ex.status.charAt(0).toUpperCase() + ex.status.slice(1),
+            progress: ex.status === 'completed' ? 100 : ex.status === 'matched' ? 75 : ex.status === 'pending' ? 25 : 0
+          };
+        });
+        setExchanges(mapped.slice(0, 2));
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const fetchMatches = async () => {
+      try {
+        const { data: dbProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', userId)
+          .limit(3);
+        
+        const mapped = (dbProfiles || []).map(p => ({
+          name: p.full_name || 'Neighbour',
+          skill: p.primary_skill || 'Various Skills',
+          distance: '1.2 km away',
+          category: p.primary_skill ? 'Creative' : 'General',
+          online: true,
+          match: p.rating ? Math.round(Number(p.rating) * 20) : 85
+        }));
+        setNearbyUsers(mapped);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    const fetchMetrics = async () => {
+      try {
+        const { count: offerCount } = await supabase
+          .from('member_skills')
+          .select('*', { count: 'exact', head: true })
+          .eq('profile_id', userId)
+          .eq('type', 'offer');
+
+        const { count: learnCount } = await supabase
+          .from('member_skills')
+          .select('*', { count: 'exact', head: true })
+          .eq('profile_id', userId)
+          .eq('type', 'learn');
+
+        const { data: prof } = await supabase
+          .from('profiles')
+          .select('completed_swaps, pending_swaps')
+          .eq('id', userId)
+          .single();
+
+        setProfileMetrics({
+          skillsOffered: (offerCount || 0) + 1,
+          skillsWanted: learnCount || 0,
+          activeExchanges: prof?.pending_swaps || 0,
+          completedSwaps: prof?.completed_swaps || 0
+        });
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    fetchExchanges();
+    fetchMatches();
+    fetchMetrics();
+  }, [userId]);
 
   const displayName = profile?.full_name || 'Member';
   const displayLocation = profile?.location || 'Nearby';
@@ -152,23 +241,23 @@ export default function UserDashboard() {
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
               <StatCard
                 label="Skills Offered"
-                value={3}
+                value={profileMetrics.skillsOffered}
                 icon={<Layers size={18} className="text-violet" />}
               />
               <StatCard
                 label="Skills Wanted"
-                value={5}
+                value={profileMetrics.skillsWanted}
                 icon={<BookOpen size={18} className="text-electric" />}
               />
               <StatCard
                 label="Active Exchanges"
-                value={2}
+                value={profileMetrics.activeExchanges}
                 icon={<ArrowRightLeft size={18} className="text-white" />}
                 accent
               />
               <StatCard
                 label="Completed"
-                value={12}
+                value={profileMetrics.completedSwaps}
                 icon={<Gift size={18} className="text-emerald-500" />}
               />
             </div>
@@ -187,69 +276,77 @@ export default function UserDashboard() {
                 </div>
 
                 <div className="space-y-3">
-                  {currentExchanges.map((exchange) => (
-                    <div
-                      key={exchange.id}
-                      className="rounded-3xl bg-white p-5 shadow-card border border-ink/5 hover-lift"
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar name={exchange.partner} showStatus status="online" />
-                          <div>
-                            <p className="font-bold text-sm">{exchange.partner}</p>
-                            <ExchangeVis yourSkill={exchange.teach} theirSkill={exchange.learn} compact />
+                  {exchanges.length > 0 ? (
+                    exchanges.map((exchange) => (
+                      <div
+                        key={exchange.id}
+                        className="rounded-3xl bg-white p-5 shadow-card border border-ink/5 hover-lift"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar name={exchange.partner} showStatus status="online" />
+                            <div>
+                              <p className="font-bold text-sm">{exchange.partner}</p>
+                              <ExchangeVis yourSkill={exchange.teach} theirSkill={exchange.learn} compact />
+                            </div>
+                          </div>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                              exchange.status === 'Completed' || exchange.status === 'Matched'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {exchange.status}
+                          </span>
+                        </div>
+
+                        {/* Progress */}
+                        <div className="mt-3">
+                          <div className="flex items-center justify-between mb-1.5">
+                            <div className="flex gap-1">
+                              {['Requested', 'Accepted', 'Scheduled', 'Completed'].map((step, i) => {
+                                const progress = exchange.progress;
+                                const stepPercent = (i + 1) * 25;
+                                const isActive = progress >= stepPercent;
+                                const isCurrent = progress >= stepPercent - 25 && progress < stepPercent;
+                                return (
+                                  <span
+                                    key={step}
+                                    className={`text-[9px] font-bold uppercase tracking-wider ${
+                                      isActive ? 'text-violet' : isCurrent ? 'text-electric' : 'text-ink/25'
+                                    }`}
+                                  >
+                                    {step}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-ink/5">
+                            <div
+                              className="h-full rounded-full bg-gradient-to-r from-violet to-electric transition-all duration-500"
+                              style={{ width: `${exchange.progress}%` }}
+                            />
                           </div>
                         </div>
-                        <span
-                          className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                            exchange.status === 'Scheduled'
-                              ? 'bg-emerald-50 text-emerald-700'
-                              : 'bg-amber-50 text-amber-700'
-                          }`}
-                        >
-                          {exchange.status}
-                        </span>
-                      </div>
 
-                      {/* Progress */}
-                      <div className="mt-3">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex gap-1">
-                            {['Requested', 'Accepted', 'Scheduled', 'Completed'].map((step, i) => {
-                              const progress = exchange.progress;
-                              const stepPercent = (i + 1) * 25;
-                              const isActive = progress >= stepPercent;
-                              const isCurrent = progress >= stepPercent - 25 && progress < stepPercent;
-                              return (
-                                <span
-                                  key={step}
-                                  className={`text-[9px] font-bold uppercase tracking-wider ${
-                                    isActive ? 'text-violet' : isCurrent ? 'text-electric' : 'text-ink/25'
-                                  }`}
-                                >
-                                  {step}
-                                </span>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        <div className="h-1.5 rounded-full bg-ink/5">
-                          <div
-                            className="h-full rounded-full bg-gradient-to-r from-violet to-electric transition-all duration-500"
-                            style={{ width: `${exchange.progress}%` }}
-                          />
+                        <div className="mt-3 flex justify-end">
+                          <Link to="/exchanges">
+                            <Button className="bg-violet/10 text-violet hover:bg-violet hover:text-white text-xs py-1.5">
+                              View Exchange
+                            </Button>
+                          </Link>
                         </div>
                       </div>
-
-                      <div className="mt-3 flex justify-end">
-                        <Link to="/exchanges">
-                          <Button className="bg-violet/10 text-violet hover:bg-violet hover:text-white text-xs py-1.5">
-                            View Exchange
-                          </Button>
-                        </Link>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="rounded-3xl bg-white p-8 text-center text-ink/40 shadow-card border border-ink/5">
+                      <ArrowRightLeft size={28} className="mx-auto mb-2" />
+                      <p className="text-sm font-bold">No active exchanges yet</p>
+                      <Link to="/explore" className="mt-2 text-xs font-bold text-violet">Find a partner →</Link>
                     </div>
-                  ))}
+                  )}
                 </div>
               </section>
 
@@ -266,7 +363,7 @@ export default function UserDashboard() {
                   </div>
 
                   <div className="space-y-3">
-                    {nearby.map((person) => (
+                    {nearbyUsers.map((person) => (
                       <div
                         key={person.name}
                         className="flex items-center gap-3 rounded-2xl bg-surface p-3 transition hover:bg-violet/5"

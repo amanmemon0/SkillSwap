@@ -42,6 +42,15 @@ const createExchange = async (req, res, next) => {
       return res.status(404).json({ message: 'Receiver skill not found' });
     }
 
+    // Fetch receiver email
+    const senderEmail = req.user.email;
+    const { data: receiverUser } = await supabase
+      .from('users')
+      .select('email')
+      .eq('id', receiverId)
+      .maybeSingle();
+    const receiverEmail = receiverUser?.email || null;
+
     // Insert exchange request
     const { data: exchange, error: exchangeErr } = await supabase
       .from('exchanges')
@@ -49,6 +58,8 @@ const createExchange = async (req, res, next) => {
         {
           sender_id: senderId,
           receiver_id: receiverId,
+          sender_email: senderEmail,
+          receiver_email: receiverEmail,
           sender_skill_id: senderSkillId,
           receiver_skill_id: receiverSkillId,
           sender_skill_name: senderSkill.name,

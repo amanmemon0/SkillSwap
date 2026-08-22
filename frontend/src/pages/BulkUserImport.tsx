@@ -64,35 +64,40 @@ export default function BulkUserImport() {
     );
   };
   const valid = rows.filter((row) => row.valid);
-  const commitImport = () => {
-    const existing = JSON.parse(localStorage.getItem("skillswap-bulk-users") || "[]");
-    const imported = valid.map((row, index) => ({
-      id: Date.now() + index,
-      fullName: row.name,
-      username: row.username,
-      email: row.email,
-      phone: "Not provided",
-      city: row.city,
-      bio: "Imported by an administrator.",
-      teachSkills: [],
-      learnSkills: [],
-      skillLevel: "Not set",
-      learningMode: "Not set",
-      availability: "Not set",
-      role: "User",
-      status: ["Active", "Pending", "Suspended", "Banned"].includes(row.status) ? row.status : "Active",
-      rating: 0,
-      totalReviews: 0,
-      completedSwaps: 0,
-      pendingSwaps: 0,
-      cancelledSwaps: 0,
-      reports: 0,
-      joinedAt: new Date().toISOString().slice(0, 10),
-      lastLogin: new Date().toISOString().slice(0, 10),
-    }));
-    localStorage.setItem("skillswap-bulk-users", JSON.stringify([...existing, ...imported]));
-    setComplete(true);
-    nav("/admin");
+  const commitImport = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      for (const row of valid) {
+        const payload = {
+          name: row.name,
+          username: row.username,
+          email: row.email,
+          password: "TemporaryPass123!",
+          phone: "0000000000",
+          country: "India",
+          state: "Gujarat",
+          city: row.city || "Ahmedabad",
+          bio: "Imported by administrator.",
+          primarySkill: "Web Development",
+          skillLevel: "Intermediate",
+          learningSkills: ["Guitar"],
+          availability: ["Weekends"],
+          learningMode: "Both"
+        };
+
+        await fetch(`${API_URL}/api/auth/register`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(payload)
+        });
+      }
+      setComplete(true);
+      nav("/admin");
+    } catch (err) {
+      console.error("Bulk import error:", err);
+    }
   };
   return (
     <main className="min-h-screen bg-[#f7f5f2] p-5 sm:p-10">

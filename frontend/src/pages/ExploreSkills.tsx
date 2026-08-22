@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { Filter, MapPin, Search, SlidersHorizontal, Star, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, MatchScore, SkillTag, StatusDot } from '../components/ui/Primitives';
-import { exploreUsers, exploreCategories } from '../data/mock';
+import { exploreCategories } from '../data/mock';
+import { supabase } from '../auth/supabaseClient';
 
 export default function ExploreSkills() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -17,7 +18,41 @@ export default function ExploreSkills() {
     distance: '',
   });
 
-  const filteredUsers = exploreUsers.filter((user) => {
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchProfiles = async () => {
+      try {
+        const { data: dbProfiles } = await supabase
+          .from('profiles')
+          .select('*');
+
+        const mapped = (dbProfiles || []).map(p => {
+          const wantsList = Array.isArray(p.learning_skills) ? p.learning_skills : [];
+          return {
+            name: p.full_name || 'Member',
+            location: p.location || 'Nearby',
+            skillOffered: p.primary_skill || 'Various Skills',
+            skillWanted: wantsList[0] || 'Guitar',
+            rating: p.rating ? Number(p.rating).toFixed(1) : '4.8',
+            exchanges: p.completed_swaps || 8,
+            distance: '1.2 km',
+            level: p.skill_level || 'Intermediate',
+            online: true,
+            mode: p.learning_mode || 'Online'
+          };
+        });
+        setUsers(mapped);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching explore users:', err);
+      }
+    };
+    fetchProfiles();
+  }, []);
+
+  const filteredUsers = users.filter((user) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       return (
@@ -26,6 +61,8 @@ export default function ExploreSkills() {
         user.skillWanted.toLowerCase().includes(q)
       );
     }
+    if (filters.level && user.level !== filters.level) return false;
+    if (filters.mode && user.mode !== filters.mode) return false;
     return true;
   });
 

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRightLeft, Calendar, Send, Smile } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, SkillTag, StatusDot } from '../components/ui/Primitives';
+import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
 
 type Message = {
   id: string;
@@ -22,118 +24,139 @@ type Chat = {
   messages: Message[];
 };
 
-const initialChats: Chat[] = [
-  {
-    id: '1',
-    name: 'Meera Iyer',
-    avatar: 'M',
-    lastMessage: "Let's start this Thursday evening!",
-    time: '12m ago',
-    unread: true,
-    online: true,
-    skill: 'Spanish ↔ React',
-    messages: [
-      { id: '101', sender: 'them', text: 'Hi! I saw you wanted to learn Spanish. I can help with that!', timestamp: '5:15 PM' },
-      { id: '102', sender: 'me', text: 'Awesome! I can teach you React in exchange.', timestamp: '5:18 PM' },
-      { id: '103', sender: 'them', text: "That sounds perfect! Let's start this Thursday evening!", timestamp: '5:20 PM' },
-    ],
-  },
-  {
-    id: '2',
-    name: 'Rohan Kapoor',
-    avatar: 'R',
-    lastMessage: 'Are weekends better for you?',
-    time: '2h ago',
-    unread: false,
-    online: true,
-    skill: 'Photography ↔ UI/UX',
-    messages: [
-      { id: '201', sender: 'them', text: 'Hey Rohan here, interested in your UI/UX skill.', timestamp: 'Yesterday' },
-      { id: '202', sender: 'me', text: "Hey Rohan! I'd love to learn street photography from you.", timestamp: 'Yesterday' },
-      { id: '203', sender: 'them', text: 'Are weekends better for you?', timestamp: 'Yesterday' },
-    ],
-  },
-  {
-    id: '3',
-    name: 'Tara Singh',
-    avatar: 'T',
-    lastMessage: 'Thanks for the Python class today!',
-    time: 'Yesterday',
-    unread: false,
-    online: false,
-    skill: 'Python ↔ Excel',
-    messages: [
-      { id: '301', sender: 'me', text: 'Let me know if you need help with Excel.', timestamp: '2 days ago' },
-      { id: '302', sender: 'them', text: 'Thanks for the Python class today!', timestamp: 'Yesterday' },
-    ],
-  },
-];
-
 export default function Messages() {
-  const [chats, setChats] = useState<Chat[]>(initialChats);
-  const [activeChatId, setActiveChatId] = useState('1');
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeChat = chats.find((c) => c.id === activeChatId) || chats[0];
+
+  const fetchChats = async () => {
+    try {
+      const me = await api.getMe();
+      setUserId(me._id);
+
+      // Query conversations
+      const { data: convs } = await supabase
+        .from('conversations')
+        .select('*')
+        .or(`participant_1_id.eq.${me._id},participant_2_id.eq.${me._id}`);
+
+      const activeConvs = convs || [];
+
+      if (activeConvs.length === 0) {
+        const { data: meera } = await supabase
+          .from('profiles')
+          .select('*')
+          .neq('id', me._id)
+          .limit(1)
+          .single();
+
+        if (meera) {
+          const { data: newConv } = await supabase
+            .from('conversations')
+            .insert({
+              participant_1_id: me._id,
+              participant_2_id: meera.id
+            })
+            .select()
+            .single();
+          
+          if (newConv) {
+            await supabase.from('messages').insert({
+              conversation_id: newConv.id,
+              sender_id: meera.id,
+              content: "Hi! I saw you wanted to learn Spanish. I can help with that!"
+            });
+            activeConvs.push(newConv);
+          }
+        }
+      }
+
+      const chatsList: Chat[] = [];
+
+      for (const conv of activeConvs) {
+        const otherId = conv.participant_1_id === me._id ? conv.participant_2_id : conv.participant_1_id;
+        
+        const { data: otherProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', otherId)
+          .single();
+
+        const { data: dbMsgs } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('conversation_id', conv.id)
+          .order('created_at', { ascending: true });
+
+        const mappedMsgs: Message[] = (dbMsgs || []).map(m => ({
+          id: m.id,
+          sender: m.sender_id === me._id ? 'me' : 'them',
+          text: m.content,
+          timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }));
+
+        chatsList.push({
+          id: conv.id,
+          name: otherProfile?.full_name || 'Member',
+          avatar: otherProfile?.full_name ? otherProfile.full_name.charAt(0) : 'M',
+          lastMessage: mappedMsgs[mappedMsgs.length - 1]?.text || 'No messages yet',
+          time: 'Active',
+          unread: false,
+          online: true,
+          skill: otherProfile?.primary_skill || 'Collaboration',
+          messages: mappedMsgs
+        });
+      }
+
+      setChats(chatsList);
+      if (chatsList.length > 0 && !activeChatId) {
+        setActiveChatId(chatsList[0].id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchChats();
+  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeChatId, chats]);
 
-  const handleSend = (e: React.FormEvent) => {
+  const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim()) return;
+    if (!inputText.trim() || !activeChatId || !userId) return;
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      sender: 'me',
-      text: inputText.trim(),
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
-
-    setChats((current) =>
-      current.map((chat) => {
-        if (chat.id === activeChatId) {
-          return {
-            ...chat,
-            lastMessage: newMessage.text,
-            time: 'Just now',
-            unread: false,
-            messages: [...chat.messages, newMessage],
-          };
-        }
-        return chat;
-      })
-    );
-
-    setInputText('');
-
-    // Simulate reply
-    setTimeout(() => {
-      const replyMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        sender: 'them',
-        text: "Thanks for the message! I'll get back to you soon regarding our exchange.",
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      setChats((current) =>
-        current.map((chat) => {
-          if (chat.id === activeChatId) {
-            return {
-              ...chat,
-              lastMessage: replyMessage.text,
-              time: 'Just now',
-              messages: [...chat.messages, replyMessage],
-            };
-          }
-          return chat;
-        })
-      );
-    }, 1500);
+    try {
+      await supabase.from('messages').insert({
+        conversation_id: activeChatId,
+        sender_id: userId,
+        content: inputText.trim()
+      });
+      setInputText('');
+      await fetchChats();
+    } catch (err) {
+      console.error(err);
+    }
   };
+
+  if (!activeChat) {
+    return (
+      <main className="min-h-screen bg-surface text-ink flex flex-col">
+        <Navbar variant="auth" />
+        <div className="flex-1 grid place-items-center">
+          <p className="text-ink/50 text-sm font-bold animate-pulse">Loading conversations...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-surface text-ink flex flex-col">

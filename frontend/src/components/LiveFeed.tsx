@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { liveFeedItems } from '../data/mock';
 import { LiveBadge } from './ui/Primitives';
+import { supabase } from '../auth/supabaseClient';
 
 const typeIcons: Record<string, string> = {
   offer: '🟢',
@@ -11,15 +11,87 @@ const typeIcons: Record<string, string> = {
 };
 
 export default function LiveFeed({ compact = false }: { compact?: boolean }) {
-  const [visibleItems, setVisibleItems] = useState(liveFeedItems.slice(0, 3));
-  const [currentIndex, setCurrentIndex] = useState(3);
+  const [feedItems, setFeedItems] = useState<any[]>([]);
+  const [visibleItems, setVisibleItems] = useState<any[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   useEffect(() => {
+    const fetchFeed = async () => {
+      try {
+        const { data: dbExchanges } = await supabase
+          .from('exchanges')
+          .select(`
+            *,
+            sender:sender_id (full_name),
+            receiver:receiver_id (full_name)
+          `)
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        const { data: dbProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('id', { ascending: false })
+          .limit(5);
+
+        const items: any[] = [];
+
+        (dbExchanges || []).forEach((ex) => {
+          if (ex.status === 'completed') {
+            items.push({
+              id: `ex-comp-${ex.id}`,
+              type: 'completed',
+              user: ex.sender?.full_name || 'Member',
+              action: 'completed a skill exchange',
+              skill: `${ex.sender_skill_name} ↔ ${ex.receiver_skill_name}`,
+              time: 'Recent'
+            });
+          } else {
+            items.push({
+              id: `ex-req-${ex.id}`,
+              type: 'looking',
+              user: ex.sender?.full_name || 'Member',
+              action: 'is looking for',
+              skill: ex.receiver_skill_name,
+              time: 'Recent'
+            });
+          }
+        });
+
+        (dbProfiles || []).forEach((p) => {
+          items.push({
+            id: `prof-${p.id}`,
+            type: 'available',
+            user: p.full_name || 'Member',
+            action: 'is currently available for',
+            skill: p.primary_skill || 'Collaboration',
+            time: 'Active'
+          });
+        });
+
+        setFeedItems(items.length > 0 ? items : [
+          { id: 'default-1', type: 'offer', user: 'Aman', action: 'just offered', skill: 'Web Development', time: '2 min ago' }
+        ]);
+      } catch (err) {
+        console.error('Error fetching live feed:', err);
+      }
+    };
+    fetchFeed();
+  }, []);
+
+  useEffect(() => {
+    if (feedItems.length === 0) return;
+    setVisibleItems(feedItems.slice(0, 3));
+    setCurrentIndex(Math.min(feedItems.length - 1, 3));
+  }, [feedItems]);
+
+  useEffect(() => {
+    if (feedItems.length === 0) return;
     const interval = setInterval(() => {
       setCurrentIndex((prev) => {
-        const nextIndex = (prev + 1) % liveFeedItems.length;
+        const nextIndex = (prev + 1) % feedItems.length;
         setVisibleItems((prevItems) => {
-          const newItems = [...prevItems.slice(1), liveFeedItems[nextIndex]];
+          const newItems = [...prevItems.slice(1), feedItems[nextIndex]];
           return newItems;
         });
         return nextIndex;
@@ -27,7 +99,7 @@ export default function LiveFeed({ compact = false }: { compact?: boolean }) {
     }, 4000);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [feedItems]);
 
   if (compact) {
     return (
