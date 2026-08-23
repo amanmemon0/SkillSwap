@@ -123,6 +123,7 @@ const loginUser = async (req, res, next) => {
       .from('users')
       .select('*')
       .eq('email', email.toLowerCase())
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (userError) return next(userError);
@@ -158,6 +159,7 @@ const getMe = async (req, res, next) => {
       .from('profiles')
       .select('*')
       .eq('id', req.user.id)
+      .is('deleted_at', null)
       .maybeSingle();
 
     if (error) return next(error);
@@ -205,13 +207,15 @@ const getAllUsers = async (req, res, next) => {
   try {
     const { data: users, error: usersErr } = await supabase
       .from('users')
-      .select('*');
+      .select('*')
+      .is('deleted_at', null);
 
     if (usersErr) return next(usersErr);
 
     const { data: profiles, error: profilesErr } = await supabase
       .from('profiles')
-      .select('*');
+      .select('*')
+      .is('deleted_at', null);
 
     if (profilesErr) return next(profilesErr);
 
@@ -234,12 +238,12 @@ const getAllUsers = async (req, res, next) => {
         availability: profile.availability || ['Weekends'],
         role: profile.role ? (profile.role.charAt(0).toUpperCase() + profile.role.slice(1)) : 'User',
         status: profile.status || 'Active',
-        rating: 4.8,
-        totalReviews: 10,
-        completedSwaps: 5,
-        pendingSwaps: 0,
-        cancelledSwaps: 0,
-        reports: 0,
+        rating: Number(profile.rating ?? 5),
+        totalReviews: profile.total_reviews ?? 0,
+        completedSwaps: profile.completed_swaps ?? 0,
+        pendingSwaps: profile.pending_swaps ?? 0,
+        cancelledSwaps: profile.cancelled_swaps ?? 0,
+        reports: profile.reports_count ?? 0,
         joinedAt: user.created_at || new Date().toISOString(),
         lastLogin: user.created_at || new Date().toISOString(),
       };
@@ -279,12 +283,29 @@ const adminDeleteUser = async (req, res, next) => {
   try {
     const { id } = req.params;
 
-    const { error } = await supabase
+    if (id === req.user.id) {
+      return res.status(400).json({ message: 'Administrators cannot delete their own account' });
+    }
+
+    const deletedAt = new Date().toISOString();
+
+    const { data, error } = await supabase
       .from('users')
-      .delete()
-      .eq('id', id);
+      .update({ deleted_at: deletedAt })
+      .eq('id', id)
+      .is('deleted_at', null)
+      .select('id')
+      .maybeSingle();
 
     if (error) return next(error);
+    if (!data) return res.status(404).json({ message: 'User not found' });
+
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ deleted_at: deletedAt, status: 'Banned' })
+      .eq('id', id);
+
+    if (profileError) return next(profileError);
 
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {

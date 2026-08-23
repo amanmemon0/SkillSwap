@@ -11,6 +11,10 @@ if (!process.env.JWT_SECRET) {
 const authRoutes = require('./routes/authRoutes');
 const exchangeRoutes = require('./routes/exchangeRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const skillRoutes = require('./routes/skillRoutes');
+const courseRoutes = require('./routes/courseRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const socialRoutes = require('./routes/socialRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,7 +34,7 @@ const corsOptions = {
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 };
 
 app.use(cors(corsOptions));
@@ -44,6 +48,10 @@ app.get('/', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/exchanges', exchangeRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api', skillRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api', messageRoutes);
+app.use('/api', socialRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

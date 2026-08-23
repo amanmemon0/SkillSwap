@@ -1,0 +1,16 @@
+const supabase = require('../config/db');
+const dbError = (res, error) => res.status(error?.code === '23505' ? 409 : 400).json({ message: error?.message || 'Database operation failed' });
+
+const pairFor = (a, b) => a < b ? [a, b] : [b, a];
+const isParticipant = (conversation, userId) => conversation && (conversation.user1_id === userId || conversation.user2_id === userId);
+
+const getConversations = async (req, res, next) => {
+  try { const { data, error } = await supabase.from('conversations').select('*, user1:profiles!conversations_user1_id_fkey(id, full_name, username), user2:profiles!conversations_user2_id_fkey(id, full_name, username)').or(`user1_id.eq.${req.user.id},user2_id.eq.${req.user.id}`).order('created_at', { ascending: false }); if (error) return dbError(res, error); return res.json(data); } catch (error) { return next(error); }
+};
+const createConversation = async (req, res, next) => {
+  try { const recipientId = req.body.recipientId; if (typeof recipientId !== 'string') return res.status(400).json({ message: 'recipientId is required' }); if (recipientId === req.user.id) return res.status(400).json({ message: 'You cannot create a conversation with yourself' }); const { data: recipient, error: recipientError } = await supabase.from('profiles').select('id').eq('id', recipientId).maybeSingle(); if (recipientError) return dbError(res, recipientError); if (!recipient) return res.status(404).json({ message: 'Recipient not found' }); const [user1, user2] = pairFor(req.user.id, recipientId); const { data: existing } = await supabase.from('conversations').select('*').eq('user1_id', user1).eq('user2_id', user2).maybeSingle(); if (existing) return res.json(existing); const { data, error } = await supabase.from('conversations').insert({ user1_id: user1, user2_id: user2 }).select().single(); if (error) return dbError(res, error); return res.status(201).json(data); } catch (error) { return next(error); }
+};
+const getMessages = async (req, res, next) => { try { const { data: conversation, error } = await supabase.from('conversations').select('*').eq('id', req.params.conversationId).maybeSingle(); if (error) return dbError(res, error); if (!isParticipant(conversation, req.user.id)) return res.status(404).json({ message: 'Conversation not found' }); const { data, error: messageError } = await supabase.from('messages').select('*, sender:profiles!messages_sender_id_fkey(id, full_name, username)').eq('conversation_id', conversation.id).order('created_at'); if (messageError) return dbError(res, messageError); return res.json(data); } catch (error) { return next(error); } };
+const sendMessage = async (req, res, next) => { try { const { data: conversation, error } = await supabase.from('conversations').select('*').eq('id', req.params.conversationId).maybeSingle(); if (error) return dbError(res, error); if (!isParticipant(conversation, req.user.id)) return res.status(404).json({ message: 'Conversation not found' }); const { data, error: insertError } = await supabase.from('messages').insert({ conversation_id: conversation.id, sender_id: req.user.id, body: req.body.body }).select().single(); if (insertError) return dbError(res, insertError); return res.status(201).json(data); } catch (error) { return next(error); } };
+
+module.exports = { getConversations, createConversation, getMessages, sendMessage };

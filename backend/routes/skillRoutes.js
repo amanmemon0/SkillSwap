@@ -1,0 +1,17 @@
+const express = require('express');
+const { protect, isAdmin } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+const controller = require('../controllers/skillController');
+const { skillRequestSchema, reviewSkillRequestSchema } = require('../utils/learningValidation');
+const router = express.Router();
+router.get('/skills', controller.listSkills);
+router.get('/skills/mine', protect, controller.mySkills);
+router.put('/skills/mine', protect, controller.setMySkills);
+router.get('/skill-requests/categories', controller.getCategories);
+router.get('/skill-requests', protect, controller.getMyRequests);
+router.post('/skill-requests', protect, validate(skillRequestSchema), controller.createRequest);
+router.patch('/skill-requests/:id', protect, validate(skillRequestSchema), controller.updateRequest);
+router.delete('/skill-requests/:id', protect, controller.revokeRequest);
+router.get('/admin/skill-requests', protect, isAdmin, controller.pendingRequests);
+router.patch('/admin/skill-requests/:id', protect, isAdmin, validate(reviewSkillRequestSchema), controller.reviewRequest);
+module.exports = router;

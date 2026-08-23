@@ -1,0 +1,11 @@
+const express = require('express');
+const { protect } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+const controller = require('../controllers/messageController');
+const { messageSchema } = require('../utils/learningValidation');
+const router = express.Router();
+router.get('/conversations', protect, controller.getConversations);
+router.post('/conversations', protect, controller.createConversation);
+router.get('/conversations/:conversationId/messages', protect, controller.getMessages);
+router.post('/conversations/:conversationId/messages', protect, validate(messageSchema), controller.sendMessage);
+module.exports = router;

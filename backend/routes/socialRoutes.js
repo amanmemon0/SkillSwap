@@ -1,0 +1,13 @@
+const express = require('express');
+const { protect } = require('../middleware/auth');
+const { validate } = require('../middleware/validate');
+const controller = require('../controllers/socialController');
+const { messageSchema, reactionSchema } = require('../utils/learningValidation');
+const { z } = require('zod');
+const router = express.Router();
+router.get('/lectures/:lectureId/messages', protect, controller.lectureMessages);
+router.post('/lectures/:lectureId/messages', protect, validate(messageSchema), controller.postLectureMessage);
+router.get('/community/posts', controller.listPosts);
+router.post('/community/posts', protect, validate(z.object({ content: z.string().trim().min(1).max(4000) })), controller.createPost);
+router.put('/community/posts/:postId/reaction', protect, validate(reactionSchema), controller.toggleReaction);
+module.exports = router;
