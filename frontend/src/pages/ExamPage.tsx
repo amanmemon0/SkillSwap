@@ -67,9 +67,9 @@ export default function ExamPage() {
     });
   };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (!exam) return;
-    const r = store.submitExam(course!.id, CURRENT_USER_ID, CURRENT_USER_NAME, answers);
+    const r = await store.submitExam(course!.id, CURRENT_USER_ID, CURRENT_USER_NAME, answers);
     if (r) {
       setResult(r);
       setSubmitted(true);
