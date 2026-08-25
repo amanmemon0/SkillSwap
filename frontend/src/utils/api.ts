@@ -118,6 +118,40 @@ export const api = {
     });
   },
 
+  getNotifications: async (): Promise<any[]> => {
+    return request<any[]>('/api/notifications');
+  },
+
+  markNotificationRead: async (id: string | number): Promise<any> => {
+    return request<any>(`/api/notifications/${id}/read`, {
+      method: 'PUT',
+    });
+  },
+
+  markAllNotificationsRead: async (): Promise<any> => {
+    return request<any>('/api/notifications/read-all', {
+      method: 'PUT',
+    });
+  },
+
+  createExchange: async (payload: { receiverId: string; senderSkillId: string; receiverSkillId: string; message?: string }): Promise<any> => {
+    return request<any>('/api/exchanges', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getExchanges: async (): Promise<any[]> => {
+    return request<any[]>('/api/exchanges');
+  },
+
+  updateExchangeStatus: async (id: string | number, status: string): Promise<any> => {
+    return request<any>(`/api/exchanges/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status }),
+    });
+  },
+
   logout: () => {
     clearToken();
   },

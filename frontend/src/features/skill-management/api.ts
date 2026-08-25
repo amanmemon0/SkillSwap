@@ -1,48 +1,108 @@
 import type { SkillManagementApi, SkillCategory, SkillRequest } from "./types";
 
-const STORAGE_KEY = "skillswap-skill-requests";
-const categories: SkillCategory[] = [
-  { id: "technology", name: "Technology", skills: ["React", "TypeScript", "Python", "Node.js", "Web Development"] },
-  { id: "design", name: "Design", skills: ["UI/UX", "Figma", "Product Design", "Photography"] },
-  { id: "languages", name: "Languages", skills: ["Spanish", "Japanese", "English"] },
-  { id: "creative", name: "Creative & practical", skills: ["Guitar", "Cooking", "Public Speaking", "Pottery"] },
-];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-function read(): SkillRequest[] { try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]") as SkillRequest[]; } catch { return []; } }
-function write(items: SkillRequest[]) { localStorage.setItem(STORAGE_KEY, JSON.stringify(items)); }
+function getHeaders() {
+  const token = localStorage.getItem('skillswap-token');
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+}
 
-/**
- * Browser-persisted workflow used by the frontend. Move these operations to
- * protected backend endpoints before deploying, so the pending-request rule is
- * also enforced outside the browser.
- */
+const mockSkillsByCategory: Record<string, string[]> = {
+  technology: ["React", "TypeScript", "Python", "Node.js", "Web Development"],
+  development: ["React", "TypeScript", "Python", "Node.js", "Web Development"],
+  design: ["UI/UX", "Figma", "Product Design", "Photography"],
+  photography: ["Photography", "Composition", "Lighting"],
+  languages: ["Spanish", "Japanese", "English"],
+  communication: ["Public Speaking", "Writing", "Negotiation"],
+  creative: ["Guitar", "Cooking", "Public Speaking", "Pottery"],
+  life_skills: ["Cooking", "Baking", "First Aid"],
+  business: ["Marketing", "Finance", "Strategy"],
+  other: ["Other"]
+};
+
 export const skillManagementApi: SkillManagementApi = {
-  getCategories: async () => categories,
-  getMyRequests: async (memberId) => read().filter((item) => item.requester?.id === memberId),
+  getCategories: async () => {
+    const res = await fetch(`${API_URL}/api/skill-requests/categories`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to fetch skill categories.");
+    const data = await res.json() as { id: string; name: string }[];
+    return data.map(cat => ({
+      id: cat.id,
+      name: cat.name,
+      skills: mockSkillsByCategory[cat.id] || []
+    }));
+  },
+
+  getMyRequests: async (_memberId) => {
+    const res = await fetch(`${API_URL}/api/skill-requests`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to fetch my skill requests.");
+    return await res.json() as SkillRequest[];
+  },
+
   requestCustomSkill: async (input) => {
-    if (read().some((item) => item.requester?.id === input.requester.id && item.status === "pending")) throw new Error("A skill request is already awaiting admin approval.");
-    const category = categories.find((item) => item.id === input.categoryId);
-    const created: SkillRequest = { id: crypto.randomUUID(), skillName: input.skillName, categoryId: category?.id || null, categoryName: category?.name || null, status: "pending", requestedAt: new Date().toISOString(), requester: input.requester };
-    write([created, ...read()]); return created;
+    const res = await fetch(`${API_URL}/api/skill-requests`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        skillName: input.skillName,
+        category: input.categoryId
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to create skill request.");
+    return data as SkillRequest;
   },
+
   updateRequest: async (id, input) => {
-    const item = read().find((request) => request.id === id);
-    if (!item) throw new Error("Skill request was not found.");
-    if (item.status !== "pending") throw new Error("Only pending skill requests can be edited.");
-    if (!input.skillName.trim()) throw new Error("Enter a skill name.");
-    const category = categories.find((entry) => entry.id === input.categoryId);
-    const updated: SkillRequest = { ...item, skillName: input.skillName.trim(), categoryId: category?.id || null, categoryName: category?.name || null };
-    write(read().map((request) => request.id === id ? updated : request)); return updated;
+    const res = await fetch(`${API_URL}/api/skill-requests/${id}`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        skillName: input.skillName,
+        category: input.categoryId
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to update skill request.");
+    return data as SkillRequest;
   },
+
   revokeRequest: async (id) => {
-    const item = read().find((request) => request.id === id);
-    if (!item) throw new Error("Skill request was not found.");
-    if (item.status !== "pending") throw new Error("Only pending skill requests can be revoked.");
-    write(read().filter((request) => request.id !== id));
+    const res = await fetch(`${API_URL}/api/skill-requests/${id}`, {
+      method: "DELETE",
+      headers: getHeaders(),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(data.message || "Failed to revoke skill request.");
+    }
   },
-  getPendingRequests: async () => read().filter((item) => item.status === "pending"),
+
+  getPendingRequests: async () => {
+    const res = await fetch(`${API_URL}/api/admin/skill-requests`, {
+      headers: getHeaders(),
+    });
+    if (!res.ok) throw new Error("Failed to fetch pending skill requests.");
+    return await res.json() as SkillRequest[];
+  },
+
   reviewRequest: async (id, decision, reviewerNote) => {
-    const item = read().find((request) => request.id === id); if (!item) throw new Error("Skill request was not found.");
-    const reviewed = { ...item, status: decision, reviewerNote }; write(read().map((request) => request.id === id ? reviewed : request)); return reviewed;
+    const res = await fetch(`${API_URL}/api/admin/skill-requests/${id}`, {
+      method: "PATCH",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        decision,
+        reviewerNote
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Failed to submit review.");
+    return data as SkillRequest;
   },
 };

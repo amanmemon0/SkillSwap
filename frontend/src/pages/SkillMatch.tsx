@@ -188,7 +188,7 @@ export default function SkillMatch() {
 
             {/* Actions */}
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
-              <Link to="/exchange-request">
+              <Link to="/exchange-request" state={{ matchedUser }}>
                 <Button className="w-full sm:w-auto bg-gradient-to-r from-violet to-electric text-white shadow-glow hover:scale-105 px-8">
                   <MessageCircle size={16} /> Propose Exchange
                 </Button>

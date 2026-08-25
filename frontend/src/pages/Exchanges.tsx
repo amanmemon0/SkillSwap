@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { BookOpen, Calendar, CheckCircle2, MessageSquare, XCircle } from 'lucide-react';
 import { motion } from 'framer-motion';
 import Navbar from '../components/Navbar';
 import { api } from '../utils/api';
-import { Avatar, Button, ExchangeVis, SkillTag } from '../components/ui/Primitives';
+import { Avatar, ExchangeVis } from '../components/ui/Primitives';
 
 type Exchange = {
   id: string;
@@ -14,44 +14,92 @@ type Exchange = {
   date: string;
   avatar: string;
   progress: number;
+  isReceiver: boolean;
 };
-
-const initialExchanges: Exchange[] = [
-  { id: '1', partnerName: 'Meera Iyer', teachSkill: 'React Basics', learnSkill: 'Spanish Conversation', status: 'Active', date: 'Thursdays, 6:00 PM', avatar: 'M', progress: 60 },
-  { id: '2', partnerName: 'Rohan Kapoor', teachSkill: 'UI/UX Fundamentals', learnSkill: 'Street Photography', status: 'Pending', date: 'TBD', avatar: 'R', progress: 20 },
-  { id: '3', partnerName: 'Tara Singh', teachSkill: 'Introduction to Python', learnSkill: 'Excel for Small Business', status: 'Completed', date: 'Completed on July 15', avatar: 'T', progress: 100 },
-  { id: '4', partnerName: 'Sofia Chen', teachSkill: 'Tailwind CSS Tips', learnSkill: 'Lightroom Editing', status: 'Cancelled', date: 'Cancelled', avatar: 'S', progress: 0 },
-];
 
 const progressSteps = ['Requested', 'Accepted', 'Scheduled', 'Completed'];
 
 export default function Exchanges() {
-  const [exchanges, setExchanges] = useState<Exchange[]>(initialExchanges);
+  const [exchanges, setExchanges] = useState<Exchange[]>([]);
+  const [dbExchanges, setDbExchanges] = useState<any[]>([]);
   const [filter, setFilter] = useState<'All' | 'Active' | 'Pending' | 'Completed'>('All');
   const [profile, setProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchExchanges = useCallback(async (userId: string) => {
+    try {
+      const data = await api.getExchanges();
+      setDbExchanges(data);
+      const mapped = data.map((ex: any): Exchange => {
+        const isSender = ex.sender_id === userId;
+        const partner = isSender ? ex.receiver : ex.sender;
+        const partnerName = partner?.full_name || 'Member';
+        
+        let displayStatus: 'Active' | 'Pending' | 'Completed' | 'Cancelled' = 'Pending';
+        if (ex.status === 'matched') displayStatus = 'Active';
+        else if (ex.status === 'completed') displayStatus = 'Completed';
+        else if (ex.status === 'sender_cancelled' || ex.status === 'receiver_declined') displayStatus = 'Cancelled';
+
+        let progress = 25;
+        if (displayStatus === 'Active') progress = 75;
+        else if (displayStatus === 'Completed') progress = 100;
+        else if (displayStatus === 'Cancelled') progress = 0;
+
+        return {
+          id: ex.id,
+          partnerName,
+          teachSkill: isSender ? ex.sender_skill_name : ex.receiver_skill_name,
+          learnSkill: isSender ? ex.receiver_skill_name : ex.sender_skill_name,
+          status: displayStatus,
+          date: new Date(ex.created_at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }),
+          avatar: partnerName.charAt(0).toUpperCase() || 'M',
+          progress,
+          isReceiver: !isSender
+        };
+      });
+      setExchanges(mapped);
+    } catch (err) {
+      console.error('Failed to fetch exchanges:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const getProfile = async () => {
+    const getProfileAndExchanges = async () => {
       try {
         const user = await api.getMe();
         setProfile(user);
+        await fetchExchanges(user._id);
       } catch (err) {
         console.error(err);
+        setLoading(false);
       }
     };
-    getProfile();
-  }, []);
+    getProfileAndExchanges();
+  }, [fetchExchanges]);
 
-  const updateStatus = (id: string, newStatus: 'Active' | 'Completed' | 'Cancelled') => {
-    setExchanges((current) =>
-      current.map((ex) => {
-        if (ex.id !== id) return ex;
-        const progress =
-          newStatus === 'Active' ? 50 :
-          newStatus === 'Completed' ? 100 : 0;
-        return { ...ex, status: newStatus, progress };
-      })
-    );
+  const handleUpdateStatus = async (id: string, newStatus: 'Active' | 'Completed' | 'Cancelled') => {
+    try {
+      const dbEx = dbExchanges.find(x => x.id === id);
+      if (!dbEx) return;
+
+      const isSender = dbEx.sender_id === profile?._id;
+      let targetStatus = '';
+      if (newStatus === 'Active') {
+        targetStatus = 'matched';
+      } else if (newStatus === 'Completed') {
+        targetStatus = 'completed';
+      } else if (newStatus === 'Cancelled') {
+        targetStatus = isSender ? 'sender_cancelled' : 'receiver_declined';
+      }
+
+      await api.updateExchangeStatus(id, targetStatus);
+      await fetchExchanges(profile?._id);
+    } catch (err: any) {
+      console.error('Failed to update status:', err);
+      alert(err.message || 'Failed to update status.');
+    }
   };
 
   const filtered = exchanges.filter((ex) => filter === 'All' || ex.status === filter);
@@ -60,6 +108,17 @@ export default function Exchanges() {
   const activeCount = exchanges.filter((ex) => ex.status === 'Active').length;
   const pendingCount = exchanges.filter((ex) => ex.status === 'Pending').length;
   const completedCount = exchanges.filter((ex) => ex.status === 'Completed').length;
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-surface text-ink">
+        <Navbar variant="auth" />
+        <div className="flex h-[50vh] items-center justify-center">
+          <p className="text-sm font-bold text-ink/50">Loading exchanges...</p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-surface text-ink">
@@ -160,10 +219,10 @@ export default function Exchanges() {
                     </span>
 
                     <div className="flex gap-1.5">
-                      {ex.status === 'Pending' && (
+                      {ex.status === 'Pending' && ex.isReceiver && (
                         <button
                           title="Accept Exchange"
-                          onClick={() => updateStatus(ex.id, 'Active')}
+                          onClick={() => handleUpdateStatus(ex.id, 'Active')}
                           className="rounded-xl p-2 bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white transition"
                         >
                           <CheckCircle2 size={16} />
@@ -172,7 +231,7 @@ export default function Exchanges() {
                       {ex.status === 'Active' && (
                         <button
                           title="Mark Complete"
-                          onClick={() => updateStatus(ex.id, 'Completed')}
+                          onClick={() => handleUpdateStatus(ex.id, 'Completed')}
                           className="rounded-xl p-2 bg-violet/10 text-violet hover:bg-violet hover:text-white transition"
                         >
                           <CheckCircle2 size={16} />
@@ -180,8 +239,8 @@ export default function Exchanges() {
                       )}
                       {(ex.status === 'Active' || ex.status === 'Pending') && (
                         <button
-                          title="Cancel Exchange"
-                          onClick={() => updateStatus(ex.id, 'Cancelled')}
+                          title="Cancel/Decline Exchange"
+                          onClick={() => handleUpdateStatus(ex.id, 'Cancelled')}
                           className="rounded-xl p-2 bg-rose-50 text-rose-500 hover:bg-rose-500 hover:text-white transition"
                         >
                           <XCircle size={16} />

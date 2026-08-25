@@ -1,22 +1,98 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, ArrowRightLeft, Calendar, Check, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Check, Calendar, Clock, Send } from 'lucide-react';
 import Navbar from '../components/Navbar';
-import { Avatar, Button, ExchangeVis, SkillTag } from '../components/ui/Primitives';
+import { Avatar, Button, ExchangeVis } from '../components/ui/Primitives';
+import { api } from '../utils/api';
+import { supabase } from '../auth/supabaseClient';
 
 export default function ExchangeRequest() {
+  const location = useLocation();
+  const matchedUser = location.state?.matchedUser;
+
+  // Fallback matchedUser if no navigation state exists
+  const fallbackUser = {
+    id: '11111111-1111-1111-1111-111111111111', // Meera Iyer
+    full_name: 'Meera Iyer',
+    location: 'Chennai',
+    primary_skill: 'Spoken English',
+    learning_skills: ['Cooking']
+  };
+
+  const targetUser = matchedUser || fallbackUser;
+
   const [message, setMessage] = useState(
-    "Hi! I can help you learn HTML/CSS and would love to learn beginner guitar from you. Are you available this weekend?"
+    `Hi! I can help you learn and would love to exchange skills with you. Are you available this weekend?`
   );
   const [mode, setMode] = useState('online');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [senderSkillId, setSenderSkillId] = useState<string>('');
+  const [receiverSkillId, setReceiverSkillId] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    const loadSkills = async () => {
+      try {
+        const me = await api.getMe();
+        const { data: myProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', me._id)
+          .single();
+        setCurrentUser(myProfile);
+
+        const { data: dbSkills } = await supabase
+          .from('skills')
+          .select('id, name');
+
+        if (dbSkills) {
+          const mySkillName = myProfile?.primary_skill;
+          let mySkill = dbSkills.find(s => s.name.toLowerCase() === mySkillName?.toLowerCase() || s.name.toLowerCase().includes(mySkillName?.toLowerCase()));
+          if (!mySkill && dbSkills.length > 0) {
+            mySkill = dbSkills[0];
+          }
+          if (mySkill) setSenderSkillId(mySkill.id);
+
+          const theirSkillName = targetUser.primary_skill;
+          let theirSkill = dbSkills.find(s => s.name.toLowerCase() === theirSkillName?.toLowerCase() || s.name.toLowerCase().includes(theirSkillName?.toLowerCase()));
+          if (!theirSkill && dbSkills.length > 0) {
+            theirSkill = dbSkills[Math.min(1, dbSkills.length - 1)];
+          }
+          if (theirSkill) setReceiverSkillId(theirSkill.id);
+        }
+        setLoading(false);
+      } catch (err) {
+        console.error('Error loading skills/profile:', err);
+        setLoading(false);
+      }
+    };
+    loadSkills();
+  }, [targetUser.primary_skill]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
+    if (!senderSkillId || !receiverSkillId) {
+      setErrorMsg('Unable to determine skill IDs. Make sure both users have valid skills.');
+      return;
+    }
+    setErrorMsg('');
+    try {
+      await api.createExchange({
+        receiverId: targetUser.id,
+        senderSkillId,
+        receiverSkillId,
+        message: `${message} [Mode: ${mode}]` + (date ? ` on ${date}` : '') + (time ? ` at ${time}` : '')
+      });
+      setSubmitted(true);
+    } catch (err: any) {
+      console.error('Failed to propose exchange:', err);
+      setErrorMsg(err.message || 'Failed to send exchange request.');
+    }
   };
 
   if (submitted) {
@@ -34,7 +110,7 @@ export default function ExchangeRequest() {
             </div>
             <h2 className="mt-6 font-display text-3xl font-bold">Request Sent! 🎉</h2>
             <p className="mt-3 text-ink/55">
-              Your skill swap request has been sent to Riya Patel. You'll be notified when they respond.
+              Your skill swap request has been sent to {targetUser.full_name}. You'll be notified when they respond.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link to="/dashboard">
@@ -84,10 +160,10 @@ export default function ExchangeRequest() {
           >
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <Avatar name="Riya Patel" size="lg" showStatus status="online" />
+                <Avatar name={targetUser.full_name} size="lg" showStatus status="online" />
                 <div>
-                  <h3 className="font-bold">Riya Patel</h3>
-                  <p className="text-xs text-ink/50">Mumbai · 🟢 Online</p>
+                  <h3 className="font-bold">{targetUser.full_name}</h3>
+                  <p className="text-xs text-ink/50">{targetUser.location} · 🟢 Online</p>
                 </div>
               </div>
               <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
@@ -95,7 +171,10 @@ export default function ExchangeRequest() {
               </span>
             </div>
 
-            <ExchangeVis yourSkill="Web Development" theirSkill="Guitar" />
+            <ExchangeVis 
+              yourSkill={currentUser?.primary_skill || 'Your Skill'} 
+              theirSkill={targetUser.primary_skill} 
+            />
           </motion.div>
 
           {/* Request Form */}
@@ -106,6 +185,12 @@ export default function ExchangeRequest() {
             onSubmit={handleSubmit}
             className="mt-6 rounded-3xl bg-white p-6 shadow-card border border-ink/5 space-y-6"
           >
+            {errorMsg && (
+              <div className="rounded-2xl bg-rose-50 p-4 border border-rose-100 text-sm font-bold text-rose-600">
+                {errorMsg}
+              </div>
+            )}
+
             {/* Message */}
             <div>
               <label className="text-sm font-bold">
@@ -179,9 +264,10 @@ export default function ExchangeRequest() {
             {/* Submit */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-violet to-electric text-white shadow-glow hover:scale-[1.02] py-4 text-base"
+              disabled={loading}
+              className="w-full bg-gradient-to-r from-violet to-electric text-white shadow-glow hover:scale-[1.02] py-4 text-base disabled:opacity-50"
             >
-              <Send size={16} /> Send Exchange Request
+              <Send size={16} /> {loading ? 'Loading...' : 'Send Exchange Request'}
             </Button>
           </motion.form>
         </div>

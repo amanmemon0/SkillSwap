@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { Filter, MapPin, Search, SlidersHorizontal, Star, X } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, MatchScore, SkillTag, StatusDot } from '../components/ui/Primitives';
-import { exploreCategories } from '../data/mock';
+import { exploreCategories, getSkillCategory } from '../data/mock';
 import { supabase } from '../auth/supabaseClient';
 
 export default function ExploreSkills() {
@@ -30,6 +30,7 @@ export default function ExploreSkills() {
 
         const mapped = (dbProfiles || []).map(p => {
           const wantsList = Array.isArray(p.learning_skills) ? p.learning_skills : [];
+          const distVal = ((p.full_name?.length || 5) % 5) + 0.8;
           return {
             name: p.full_name || 'Member',
             location: p.location || 'Nearby',
@@ -37,10 +38,11 @@ export default function ExploreSkills() {
             skillWanted: wantsList[0] || 'Guitar',
             rating: p.rating ? Number(p.rating).toFixed(1) : '4.8',
             exchanges: p.completed_swaps || 8,
-            distance: '1.2 km',
+            distance: `${distVal.toFixed(1)} km`,
             level: p.skill_level || 'Intermediate',
             online: true,
-            mode: p.learning_mode || 'Online'
+            mode: p.learning_mode || 'Online',
+            availability: Array.isArray(p.availability) ? p.availability : []
           };
         });
         setUsers(mapped);
@@ -52,18 +54,73 @@ export default function ExploreSkills() {
     fetchProfiles();
   }, []);
 
+  const categoryNameToKey: Record<string, string> = {
+    'Technology': 'tech',
+    'Design': 'design',
+    'Music': 'music',
+    'Languages': 'language',
+    'Fitness': 'fitness',
+    'Photography': 'photo',
+    'Cooking': 'cooking',
+    'Business': 'business',
+    'Academics': 'academics',
+    'Hobbies': 'hobby',
+  };
+
   const filteredUsers = users.filter((user) => {
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
-      return (
+      const matchesQuery =
         user.name.toLowerCase().includes(q) ||
         user.skillOffered.toLowerCase().includes(q) ||
-        user.skillWanted.toLowerCase().includes(q)
-      );
+        user.skillWanted.toLowerCase().includes(q);
+      if (!matchesQuery) return false;
+    }
+    if (activeCategory !== 'All') {
+      const catKey = categoryNameToKey[activeCategory];
+      if (catKey) {
+        const userCatOffered = getSkillCategory(user.skillOffered);
+        const userCatWanted = getSkillCategory(user.skillWanted);
+        if (userCatOffered !== catKey && userCatWanted !== catKey) return false;
+      }
     }
     if (filters.level && user.level !== filters.level) return false;
     if (filters.mode && user.mode !== filters.mode) return false;
+    if (filters.availability) {
+      const hasAvailability = user.availability.some((a: string) =>
+        a.toLowerCase().includes(filters.availability.toLowerCase())
+      );
+      if (!hasAvailability) return false;
+    }
+    if (filters.distance) {
+      const maxDistance = parseFloat(filters.distance.replace(/[^\d.]/g, ''));
+      const userDistance = parseFloat(user.distance.replace(/[^\d.]/g, ''));
+      if (!isNaN(maxDistance) && !isNaN(userDistance) && userDistance > maxDistance) {
+        return false;
+      }
+    }
     return true;
+  });
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const aOfferedMatch = a.skillOffered.toLowerCase().includes(q);
+      const aWantedMatch = a.skillWanted.toLowerCase().includes(q);
+      const bOfferedMatch = b.skillOffered.toLowerCase().includes(q);
+      const bWantedMatch = b.skillWanted.toLowerCase().includes(q);
+      
+      const aMatches = aOfferedMatch || aWantedMatch;
+      const bMatches = bOfferedMatch || bWantedMatch;
+      
+      if (aMatches && !bMatches) return -1;
+      if (!aMatches && bMatches) return 1;
+      
+      if (aMatches && bMatches) {
+        return Number(b.rating) - Number(a.rating);
+      }
+    }
+    return Number(b.rating) - Number(a.rating);
   });
 
   return (
@@ -215,7 +272,7 @@ export default function ExploreSkills() {
           <div>
             <div className="flex items-center justify-between mb-5">
               <p className="text-sm text-ink/50">
-                <span className="font-bold text-ink">{filteredUsers.length}</span> skill swappers found
+                <span className="font-bold text-ink">{sortedUsers.length}</span> skill swappers found
               </p>
               <button
                 onClick={() => setShowFilters(!showFilters)}
@@ -226,7 +283,7 @@ export default function ExploreSkills() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              {filteredUsers.map((user, i) => (
+              {sortedUsers.map((user, i) => (
                 <motion.div
                   key={user.name}
                   initial={{ opacity: 0, y: 20 }}
@@ -286,7 +343,7 @@ export default function ExploreSkills() {
               ))}
             </div>
 
-            {filteredUsers.length === 0 && (
+            {sortedUsers.length === 0 && (
               <div className="text-center rounded-3xl bg-white p-16 border border-ink/5 shadow-card">
                 <span className="text-5xl">🔍</span>
                 <p className="mt-4 font-display text-xl font-bold">No matches found</p>

@@ -33,29 +33,84 @@ const authLinks: NavLinkItem[] = [
 export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'auth' | 'auto' }) {
   const nav = useNavigate();
   const location = useLocation();
-  const [profile, setProfile] = useState<{ full_name: string; location: string; email: string } | null>(null);
+  const [profile, setProfile] = useState<{ id: string; full_name: string; location: string; email: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(initialNotifications);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const isAuthenticated = variant === 'auth' || (variant === 'auto' && !!localStorage.getItem('skillswap-token'));
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    const getProfile = async () => {
+    let channel: any;
+
+    const loadData = async () => {
       try {
         const user = await api.getMe();
         setProfile({
+          id: user._id,
           full_name: user.name,
           location: user.location,
           email: user.email,
         });
+
+        // Fetch notifications from backend
+        const notifs = await api.getNotifications();
+        setNotifications(notifs.map(n => ({
+          id: n.id,
+          title: n.title,
+          detail: n.detail,
+          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: n.read
+        })));
+
+        // Subscribe to live realtime notifications
+        const { supabase } = await import('../auth/supabaseClient');
+        channel = supabase
+          .channel(`notifications:profile:${user._id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notifications',
+              filter: `profile_id=eq.${user._id}`
+            },
+            (payload) => {
+              if (payload.eventType === 'INSERT') {
+                const newNotif = {
+                  id: payload.new.id,
+                  title: payload.new.title,
+                  detail: payload.new.detail,
+                  time: 'Just now',
+                  read: payload.new.read
+                };
+                setNotifications(prev => [newNotif, ...prev]);
+              } else if (payload.eventType === 'UPDATE') {
+                setNotifications(prev => prev.map(n => n.id === payload.new.id ? {
+                  ...n,
+                  read: payload.new.read
+                } : n));
+              } else if (payload.eventType === 'DELETE') {
+                setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
+              }
+            }
+          )
+          .subscribe();
       } catch (err) {
-        console.error('Failed to get navbar profile:', err);
+        console.error('Failed to get navbar data:', err);
       }
     };
-    getProfile();
+    loadData();
+
+    return () => {
+      if (channel) {
+        import('../auth/supabaseClient').then(({ supabase }) => {
+          supabase.removeChannel(channel);
+        });
+      }
+    };
   }, [isAuthenticated]);
 
   const logout = () => {
@@ -67,8 +122,14 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
   const displayLocation = profile?.location || 'Nearby';
   const displayEmail = profile?.email || '';
   const unreadCount = notifications.filter((n) => !n.read).length;
-  const markRead = (id: number) =>
-    setNotifications((current) => current.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  const markRead = async (id: string | number) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications((current) => current.map((n) => (n.id === id ? { ...n, read: true } : n)));
+    } catch (err) {
+      console.error('Failed to mark notification read:', err);
+    }
+  };
 
   const links = isAuthenticated ? authLinks : publicLinks;
   const isLanding = location.pathname === '/';
@@ -310,9 +371,14 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
             {unreadCount > 0 && (
               <button
                 type="button"
-                onClick={() =>
-                  setNotifications((current) => current.map((n) => ({ ...n, read: true })))
-                }
+                onClick={async () => {
+                  try {
+                    await api.markAllNotificationsRead();
+                    setNotifications((current) => current.map((n) => ({ ...n, read: true })));
+                  } catch (err) {
+                    console.error('Failed to mark all read:', err);
+                  }
+                }}
                 className="text-xs font-extrabold text-violet hover:text-ink transition"
               >
                 Mark all read
