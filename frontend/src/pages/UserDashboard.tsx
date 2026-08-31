@@ -37,7 +37,6 @@ const sideLinks = [
   { to: '/exchanges', icon: ArrowRightLeft, label: 'My Exchanges' },
   { to: '/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/certificates', icon: Award, label: 'Certificates' },
-  { to: '/community', icon: Users, label: 'Community' },
 ];
 
 export default function UserDashboard() {

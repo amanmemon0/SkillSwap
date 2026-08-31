@@ -11,7 +11,6 @@ import Messages from './pages/Messages';
 import ExploreSkills from './pages/ExploreSkills';
 import SkillMatch from './pages/SkillMatch';
 import ExchangeRequest from './pages/ExchangeRequest';
-import Community from './pages/Community';
 import ProtectedRoute from './auth/ProtectedRoute';
 
 // P2P Learning, Exams & Certificates
@@ -25,6 +24,8 @@ import CertificatePage from './pages/CertificatePage';
 import CertificateView from './pages/CertificateView';
 import CertificateVerify from './pages/CertificateVerify';
 
+import NotFound from './pages/NotFound';
+
 export default function App() {
   return (
     <Routes>
@@ -35,7 +36,6 @@ export default function App() {
       <Route path="/explore" element={<ExploreSkills />} />
       <Route path="/match" element={<SkillMatch />} />
       <Route path="/exchange-request" element={<ExchangeRequest />} />
-      <Route path="/community" element={<Community />} />
       <Route path="/certificates/verify" element={<CertificateVerify />} />
 
       {/* Admin Routes */}
@@ -63,7 +63,7 @@ export default function App() {
       <Route path="/certificates/:certificateId" element={<ProtectedRoute role="user"><CertificateView /></ProtectedRoute>} />
 
       {/* Fallback */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

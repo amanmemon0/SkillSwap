@@ -4,7 +4,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Compass, GraduationCap, Home, MessageCircle, ArrowRightLeft,
-  Users, Settings, Award, ChevronRight, User, FileText,
+  Settings, Award, ChevronRight, User, FileText,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button, SkillTag } from '../components/ui/Primitives';
@@ -20,7 +20,6 @@ const sideLinks = [
   { to: '/exchanges', icon: ArrowRightLeft, label: 'My Exchanges' },
   { to: '/messages', icon: MessageCircle, label: 'Messages' },
   { to: '/certificates', icon: Award, label: 'Certificates' },
-  { to: '/community', icon: Users, label: 'Community' },
 ];
 
 export default function MyTeaching() {

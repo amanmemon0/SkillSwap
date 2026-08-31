@@ -1,28 +1,71 @@
 /* ═══════════════════════════════════════════════════════════
-   Live Lecture — Video-call mock interface
+   Live Lecture — Real video-call interface powered by Daily.co
    ═══════════════════════════════════════════════════════════ */
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ArrowLeft, Mic, MicOff, Video, VideoOff, Monitor, MessageSquare,
-  Maximize, LogOut, Users, Clock, Wifi, CheckCircle2, Send, X,
+  LogOut, Users, Clock, Wifi, CheckCircle2, Send, Phone, Loader2,
+  AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DailyProvider, DailyAudio, useParticipantIds } from '@daily-co/daily-react';
 import { Avatar, Button } from '../components/ui/Primitives';
+import { VideoTile } from '../components/ui/VideoTile';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
+import { useDailyCall } from '../hooks/useDailyCall';
 import { useLearningStore, mockCourses, mockChatMessages, CURRENT_USER_ID, CURRENT_USER_NAME } from '../data/learningMockData';
 import type { ChatMessage } from '../data/skillswapTypes';
 
+/* ─── Helpers ─── */
+const DAILY_DOMAIN = import.meta.env.VITE_DAILY_DOMAIN || 'your-team.daily.co';
+
+/** Build a deterministic Daily room URL from course + lecture IDs */
+function buildRoomUrl(courseId: string, lectureId: string): string {
+  // For testing purposes, we will use a single hardcoded room name.
+  // This means you only have to create ONE room in Daily.co to test any lecture!
+  return `https://${DAILY_DOMAIN}/skillswap-test-room`;
+}
+
+const formatTime = (s: number) => {
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+};
+
+/* ═══════════════════════════════════════════════════════════
+   Main Export — wraps everything in DailyProvider
+   ═══════════════════════════════════════════════════════════ */
 export default function LiveLecture() {
+  return (
+    <DailyProvider>
+      <LiveLectureInner />
+      {/* DailyAudio handles all remote audio routing automatically */}
+      <DailyAudio />
+    </DailyProvider>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Inner Component — uses Daily hooks (must be inside DailyProvider)
+   ═══════════════════════════════════════════════════════════ */
+function LiveLectureInner() {
   const { courseId, lectureId } = useParams<{ courseId: string; lectureId: string }>();
   const nav = useNavigate();
   const store = useLearningStore();
   const { toasts, show, dismiss } = useToast();
 
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
-  const [screenShare, setScreenShare] = useState(false);
+  /* ─── Daily.co call controls ─── */
+  const {
+    callState, error: callError,
+    isMicOn, isCamOn, isScreenSharing,
+    localSessionId, participantIds,
+    join, leave,
+    toggleMic, toggleCam, toggleScreenShare,
+  } = useDailyCall();
+
+  /* ─── UI state ─── */
   const [chatOpen, setChatOpen] = useState(false);
   const [participantsOpen, setParticipantsOpen] = useState(true);
   const [showLeave, setShowLeave] = useState(false);
@@ -32,31 +75,27 @@ export default function LiveLecture() {
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  /* ─── Course / lecture data ─── */
   const course = mockCourses.find(c => c.id === courseId);
   const lectures = course ? store.getCourseLectures(course.id) : [];
   const lecture = lectures.find(l => l.id === lectureId);
   const isTeacher = course?.teacherId === CURRENT_USER_ID;
-  const enrollment = course ? store.getEnrollment(course.id, CURRENT_USER_ID) : null;
   const enrollments = course ? store.getCourseEnrollments(course.id) : [];
 
-  // Timer
+  /* ─── Timer (only runs when joined) ─── */
   useEffect(() => {
+    if (callState !== 'joined') return;
     const timer = setInterval(() => setElapsed(p => p + 1), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [callState]);
 
-  // Auto-scroll chat
+  /* ─── Auto-scroll chat ─── */
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-  };
-
-  if (!course || !lecture) {
+  /* ─── 404 guard ─── */
+  if (!course || !lecture || !courseId || !lectureId) {
     return (
       <main className="min-h-screen bg-ink flex items-center justify-center">
         <p className="text-white/50">Lecture not found.</p>
@@ -64,15 +103,13 @@ export default function LiveLecture() {
     );
   }
 
-  const participants = [
-    { id: course.teacherId, name: course.teacherName, role: 'tutor' as const, isOnline: true },
-    ...enrollments.map(e => ({
-      id: e.learnerId,
-      name: e.learnerName,
-      role: 'learner' as const,
-      isOnline: Math.random() > 0.2,
-    })),
-  ];
+  const roomUrl = buildRoomUrl(courseId, lectureId);
+
+  /* ─── Handlers ─── */
+  const handleJoin = async () => {
+    await join(roomUrl, CURRENT_USER_NAME);
+    show('Connected to lecture!', 'success');
+  };
 
   const handleSendChat = () => {
     if (!chatInput.trim()) return;
@@ -89,7 +126,6 @@ export default function LiveLecture() {
 
   const handleCompleteLecture = () => {
     if (isTeacher) {
-      // Teacher marks the lecture complete for all learners
       enrollments.forEach(e => {
         store.completeLecture(course.id, lecture.id, e.learnerId);
       });
@@ -101,14 +137,99 @@ export default function LiveLecture() {
     setShowComplete(false);
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     setShowLeave(false);
+    await leave();
     nav(`/learning/${courseId}`);
   };
 
+  /* ─── Build participants list for sidebar ─── */
+  const sidebarParticipants = [
+    { id: course.teacherId, name: course.teacherName, role: 'tutor' as const, isOnline: true },
+    ...enrollments.map(e => ({
+      id: e.learnerId,
+      name: e.learnerName,
+      role: 'learner' as const,
+      isOnline: callState === 'joined' ? Math.random() > 0.2 : false,
+    })),
+  ];
+
+  /* ═══════════════════════════════════════════════════════
+     Pre-Join Screen (Hair Check)
+     ═══════════════════════════════════════════════════════ */
+  if (callState === 'idle' || callState === 'joining' || callState === 'error') {
+    return (
+      <main className="min-h-screen bg-ink flex items-center justify-center p-6">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-md rounded-3xl border border-white/10 bg-gradient-to-br from-violet/10 via-ink to-electric/5 p-8 text-center"
+        >
+          {/* Header */}
+          <h1 className="text-2xl font-bold text-white">
+            {course.skillName} — Lecture {lecture.order}
+          </h1>
+          <p className="mt-1 text-sm text-white/50">{lecture.title}</p>
+
+          {/* Camera preview placeholder */}
+          <div className="mt-6 mx-auto h-48 w-full max-w-xs rounded-2xl border border-white/10 bg-gradient-to-br from-ink to-violet/20 flex flex-col items-center justify-center overflow-hidden">
+            <Avatar name={CURRENT_USER_NAME} size="xl" />
+            <p className="mt-3 text-sm font-bold text-white">{CURRENT_USER_NAME}</p>
+            <p className="text-xs text-white/40">{isTeacher ? 'Tutor' : 'Learner'}</p>
+          </div>
+
+          {/* Info */}
+          <p className="mt-5 text-xs text-white/40 leading-relaxed">
+            Your camera and microphone will be activated when you join.
+            <br />
+            Make sure to allow browser permissions when prompted.
+          </p>
+
+          {/* Error display */}
+          {callState === 'error' && callError && (
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-rose-500/10 border border-rose-500/20 px-4 py-3 text-sm text-rose-400">
+              <AlertTriangle size={16} />
+              <span>{callError}</span>
+            </div>
+          )}
+
+          {/* Join button */}
+          <button
+            onClick={handleJoin}
+            disabled={callState === 'joining'}
+            className="mt-6 w-full rounded-2xl bg-gradient-to-r from-violet to-electric px-6 py-3.5 text-sm font-bold text-white shadow-glow transition hover:shadow-glow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {callState === 'joining' ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Connecting…
+              </>
+            ) : (
+              <>
+                <Phone size={18} />
+                Join Lecture
+              </>
+            )}
+          </button>
+
+          {/* Back button */}
+          <button
+            onClick={() => nav(`/learning/${courseId}`)}
+            className="mt-3 text-xs text-white/40 hover:text-white/60 transition"
+          >
+            ← Back to course
+          </button>
+        </motion.div>
+      </main>
+    );
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     In-Call Interface
+     ═══════════════════════════════════════════════════════ */
   return (
     <main className="min-h-screen bg-ink text-white flex flex-col">
-      {/* Top Bar */}
+      {/* ─── Top Bar ─── */}
       <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
         <div className="flex items-center gap-4">
           <button onClick={() => setShowLeave(true)} className="rounded-lg p-2 hover:bg-white/10 transition">
@@ -135,47 +256,47 @@ export default function LiveLecture() {
         </div>
       </header>
 
-      {/* Main Layout */}
+      {/* ─── Main Layout ─── */}
       <div className="flex-1 flex overflow-hidden">
         {/* Video Area */}
         <div className="flex-1 flex flex-col p-4 gap-4">
-          {/* Main Video (Tutor) */}
-          <div className="flex-1 relative rounded-2xl overflow-hidden bg-gradient-to-br from-violet/30 via-ink to-electric/20 border border-white/10">
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <Avatar name={course.teacherName} size="xl" />
-              <p className="mt-4 text-lg font-bold">{course.teacherName}</p>
-              <p className="text-sm text-white/50">{isTeacher ? 'You (Teaching)' : 'Tutor'}</p>
-            </div>
-            {/* Tutor badge */}
-            <div className="absolute top-4 left-4 rounded-full bg-violet/80 backdrop-blur px-3 py-1 text-xs font-bold">
-              🎓 Tutor
-            </div>
-            {screenShare && (
+          {/* Featured video (local user or first remote) */}
+          <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10">
+            {localSessionId && (
+              <VideoTile
+                sessionId={localSessionId}
+                isLocal
+                isFeatured
+                badge={isTeacher ? '🎓 Tutor' : undefined}
+              />
+            )}
+            {isScreenSharing && (
               <div className="absolute top-4 right-4 rounded-full bg-emerald-500/80 backdrop-blur px-3 py-1 text-xs font-bold">
                 🖥 Screen Sharing
               </div>
             )}
           </div>
 
-          {/* Self/Learner Videos Grid */}
+          {/* Remote participants video grid */}
           <div className="flex gap-3 overflow-x-auto pb-1">
-            {participants.filter(p => p.id !== course.teacherId).slice(0, 4).map(p => (
-              <div
-                key={p.id}
-                className="relative h-28 w-40 shrink-0 rounded-xl bg-gradient-to-br from-ink to-violet/10 border border-white/10 flex flex-col items-center justify-center"
-              >
-                <Avatar name={p.name} size="md" />
-                <p className="mt-1.5 text-xs font-bold truncate max-w-[130px]">{p.name}</p>
-                {p.id === CURRENT_USER_ID && (
-                  <span className="absolute top-2 left-2 text-[10px] font-bold text-cyan">You</span>
-                )}
-                <span className={`absolute top-2 right-2 h-2 w-2 rounded-full ${p.isOnline ? 'bg-emerald-400' : 'bg-gray-500'}`} />
-              </div>
+            {participantIds.map(pid => (
+              <VideoTile
+                key={pid}
+                sessionId={pid}
+              />
             ))}
+            {/* If no remote participants yet, show placeholders */}
+            {participantIds.length === 0 && (
+              <div className="h-28 w-40 shrink-0 rounded-xl border border-dashed border-white/10 flex items-center justify-center">
+                <p className="text-[10px] text-white/30 text-center px-2">
+                  Waiting for others to join…
+                </p>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Side Panel */}
+        {/* ─── Side Panel ─── */}
         <AnimatePresence>
           {(participantsOpen || chatOpen) && (
             <motion.aside
@@ -190,7 +311,7 @@ export default function LiveLecture() {
                   onClick={() => { setParticipantsOpen(true); setChatOpen(false); }}
                   className={`flex-1 px-4 py-3 text-xs font-bold transition ${participantsOpen && !chatOpen ? 'text-white border-b-2 border-violet' : 'text-white/40 hover:text-white/60'}`}
                 >
-                  <Users size={14} className="inline mr-1.5" /> Participants ({participants.length})
+                  <Users size={14} className="inline mr-1.5" /> Participants ({sidebarParticipants.length})
                 </button>
                 <button
                   onClick={() => { setChatOpen(true); setParticipantsOpen(false); }}
@@ -203,7 +324,7 @@ export default function LiveLecture() {
               {/* Participants */}
               {participantsOpen && !chatOpen && (
                 <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                  {participants.map(p => (
+                  {sidebarParticipants.map(p => (
                     <div key={p.id} className="flex items-center gap-3 rounded-xl p-2.5 hover:bg-white/5 transition">
                       <Avatar name={p.name} size="sm" />
                       <div className="flex-1 min-w-0">
@@ -258,12 +379,12 @@ export default function LiveLecture() {
         </AnimatePresence>
       </div>
 
-      {/* Bottom Toolbar */}
+      {/* ─── Bottom Toolbar ─── */}
       <footer className="border-t border-white/10 px-4 py-3">
         <div className="flex items-center justify-center gap-2 sm:gap-3">
-          <ToolbarButton active={micOn} onClick={() => setMicOn(!micOn)} icon={micOn ? Mic : MicOff} label={micOn ? 'Mute' : 'Unmute'} />
-          <ToolbarButton active={camOn} onClick={() => setCamOn(!camOn)} icon={camOn ? Video : VideoOff} label={camOn ? 'Stop Video' : 'Start Video'} />
-          <ToolbarButton active={screenShare} onClick={() => { setScreenShare(!screenShare); show(screenShare ? 'Screen sharing stopped' : 'Screen sharing started', 'info'); }} icon={Monitor} label="Share Screen" />
+          <ToolbarButton active={isMicOn} onClick={toggleMic} icon={isMicOn ? Mic : MicOff} label={isMicOn ? 'Mute' : 'Unmute'} />
+          <ToolbarButton active={isCamOn} onClick={toggleCam} icon={isCamOn ? Video : VideoOff} label={isCamOn ? 'Stop Video' : 'Start Video'} />
+          <ToolbarButton active={isScreenSharing} onClick={toggleScreenShare} icon={Monitor} label="Share Screen" />
           <ToolbarButton active={chatOpen} onClick={() => { setChatOpen(!chatOpen); if (!chatOpen) setParticipantsOpen(false); }} icon={MessageSquare} label="Chat" />
           <ToolbarButton active={participantsOpen && !chatOpen} onClick={() => { setParticipantsOpen(!participantsOpen || chatOpen); if (chatOpen) setChatOpen(false); }} icon={Users} label="People" />
 
@@ -289,11 +410,11 @@ export default function LiveLecture() {
         </div>
       </footer>
 
-      {/* Modals */}
+      {/* ─── Modals ─── */}
       {showLeave && (
         <ConfirmModal
           title="Leave Lecture?"
-          message="Are you sure you want to leave this lecture? Your progress won't be lost."
+          message="Are you sure you want to leave this lecture? Your camera and microphone will be disconnected."
           confirmLabel="Leave"
           variant="danger"
           onConfirm={handleLeave}

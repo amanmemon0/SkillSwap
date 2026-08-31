@@ -17,7 +17,6 @@ const publicLinks: NavLinkItem[] = [
   { to: '/', label: 'Home' },
   { to: '/explore', label: 'Explore Skills' },
   { to: '/#how', label: 'How It Works', isHash: true },
-  { to: '/community', label: 'Community' },
 ];
 
 /* Authenticated nav links */
