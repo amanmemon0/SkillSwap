@@ -1,0 +1,73 @@
+const express = require('express');
+const cors = require('cors');
+const dotenv = require('dotenv');
+
+dotenv.config();
+
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET must be configured');
+}
+
+const authRoutes = require('../routes/authRoutes');
+const exchangeRoutes = require('../routes/exchangeRoutes');
+const notificationRoutes = require('../routes/notificationRoutes');
+const skillRoutes = require('../routes/skillRoutes');
+const courseRoutes = require('../routes/courseRoutes');
+const messageRoutes = require('../routes/messageRoutes');
+const socialRoutes = require('../routes/socialRoutes');
+
+const app = express();
+const PORT = process.env.PORT || 5000;
+
+const allowedOrigins = [
+  process.env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:3000',
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    // Vercel serverless functions sometimes have undefined origins, allow them or handle properly
+    if (!origin || allowedOrigins.includes(origin) || origin.includes('vercel.app')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+};
+
+app.use(cors(corsOptions));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+app.get('/api', (req, res) => {
+  res.json({ message: 'SkillSwap API is running inside Vercel Serverless!' });
+});
+
+app.use('/api/auth', authRoutes);
+app.use('/api/exchanges', exchangeRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api', skillRoutes);
+app.use('/api/courses', courseRoutes);
+app.use('/api', messageRoutes);
+app.use('/api', socialRoutes);
+
+app.use((err, req, res, next) => {
+  console.error(err);
+
+  const statusCode = err.statusCode || 500;
+  res.status(statusCode).json({
+    message: err.message || 'Internal server error',
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+  });
+});
+
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
