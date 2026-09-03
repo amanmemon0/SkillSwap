@@ -5,13 +5,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   ArrowLeft, Users, BookOpen, FileText, Award, CheckCircle2, Clock,
-  Play, XCircle, ChevronRight,
+  Play, XCircle, ChevronRight, Plus, CalendarClock,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { ScheduleLectureModal } from '../components/ui/ScheduleLectureModal';
+import { ScheduleExamModal } from '../components/ui/ScheduleExamModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
 import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
@@ -25,6 +27,8 @@ export default function TeachingCourseDetail() {
   const { toasts, show, dismiss } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('learners');
   const [confirmAction, setConfirmAction] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [showScheduleLecture, setShowScheduleLecture] = useState(false);
+  const [showScheduleExam, setShowScheduleExam] = useState(false);
 
   const course = mockCourses.find(c => c.id === courseId);
   const enrollments = course ? store.getCourseEnrollments(course.id) : [];
@@ -166,6 +170,24 @@ export default function TeachingCourseDetail() {
           {/* Lectures Tab */}
           {activeTab === 'lectures' && (
             <div className="space-y-2">
+              {/* ── NEW: Schedule button ── */}
+              <div className="flex justify-end mb-3">
+                <Button
+                  onClick={() => setShowScheduleLecture(true)}
+                  className="bg-gradient-to-r from-violet to-electric text-white text-xs py-2"
+                >
+                  <Plus size={14} /> Schedule Lecture
+                </Button>
+              </div>
+
+              {lectures.length === 0 && (
+                <div className="rounded-3xl bg-white p-12 text-center text-ink/40 shadow-card border border-ink/5">
+                  <BookOpen size={32} className="mx-auto mb-3" />
+                  <p className="font-bold">No lectures yet</p>
+                  <p className="mt-1 text-xs">Click "Schedule Lecture" to create your first lecture.</p>
+                </div>
+              )}
+
               {lectures.map((lecture, i) => {
                 const attendedCount = enrollments.filter(e => e.lecturesCompleted >= lecture.order).length;
                 return (
@@ -180,6 +202,13 @@ export default function TeachingCourseDetail() {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold">Lecture {lecture.order}: {lecture.title}</p>
                       <p className="text-xs text-ink/40">{lecture.duration} · {attendedCount}/{enrollments.length} attended</p>
+                      {/* Scheduled time */}
+                      {lecture.scheduledAt && (
+                        <p className="mt-0.5 flex items-center gap-1 text-[10px] text-violet font-bold">
+                          <CalendarClock size={10} />
+                          {new Date(lecture.scheduledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      )}
                     </div>
                     <StatusBadge status={lecture.status} />
                     {lecture.status !== 'completed' && (
@@ -199,6 +228,38 @@ export default function TeachingCourseDetail() {
           {/* Exams Tab */}
           {activeTab === 'exams' && (
             <div className="space-y-3">
+              {/* ── NEW: Schedule Exam Date button ── */}
+              <div className="flex justify-end mb-3">
+                <Button
+                  onClick={() => setShowScheduleExam(true)}
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs py-2"
+                >
+                  <CalendarClock size={14} /> Schedule Exam Date
+                </Button>
+              </div>
+
+              {/* Show currently scheduled exam date if set */}
+              {(() => {
+                const scheduled = store.getExamScheduledAt(course.id);
+                return scheduled ? (
+                  <div className="flex items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-5 py-3">
+                    <CalendarClock size={18} className="text-amber-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-800">Exam Scheduled</p>
+                      <p className="text-xs text-amber-700">
+                        {new Date(scheduled).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowScheduleExam(true)}
+                      className="ml-auto text-xs font-bold text-amber-600 hover:text-amber-800 transition"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : null;
+              })()}
+
               {enrollments.filter(e => ['requested', 'scheduled', 'passed', 'failed', 'submitted'].includes(e.examStatus)).length === 0 ? (
                 <div className="rounded-3xl bg-white p-12 text-center text-ink/40 shadow-card border border-ink/5">
                   <FileText size={32} className="mx-auto mb-3" />
@@ -348,6 +409,32 @@ export default function TeachingCourseDetail() {
           variant={confirmAction.type.includes('reject') || confirmAction.type.includes('fail') ? 'danger' : 'primary'}
           onConfirm={handleConfirm}
           onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
+      {/* Schedule Lecture Modal */}
+      {showScheduleLecture && (
+        <ScheduleLectureModal
+          courseId={course.id}
+          onClose={() => setShowScheduleLecture(false)}
+          onSave={async (data) => {
+            await store.createLecture(course.id, data);
+            show(`Lecture "${data.title}" scheduled! Learners notified.`, 'success');
+          }}
+        />
+      )}
+
+      {/* Schedule Exam Modal */}
+      {showScheduleExam && (
+        <ScheduleExamModal
+          courseId={course.id}
+          courseName={course.skillName}
+          existingScheduledAt={store.getExamScheduledAt(course.id)}
+          onClose={() => setShowScheduleExam(false)}
+          onSave={async (scheduledAt) => {
+            await store.scheduleExamDate(course.id, scheduledAt);
+            show(`Exam scheduled! All learners notified.`, 'success');
+          }}
         />
       )}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />

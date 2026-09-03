@@ -6,7 +6,7 @@ import { supabase } from '../auth/supabaseClient';
 import type {
   Course, Enrollment, Lecture, Exam, ExamAttempt,
   CertificateRequest, Certificate, ExamStatus, CertificateStatus,
-  ApprovalStatus, ChatMessage
+  ApprovalStatus, ChatMessage, AppNotification
 } from './skillswapTypes';
 
 /* ─── Active User Helpers ─── */
@@ -29,6 +29,23 @@ export function useLearningStore() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
+
+  /* ─── Notification state (localStorage-backed) ─── */
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ss_notifications') || '[]');
+    } catch { return []; }
+  });
+
+  const _saveNotifications = (list: AppNotification[]) => {
+    localStorage.setItem('ss_notifications', JSON.stringify(list));
+    setNotifications(list);
+  };
+
+  const _pushNotifications = (notifs: AppNotification[]) => {
+    const updated = [...notifs, ...notifications];
+    _saveNotifications(updated);
+  };
 
   const refresh = useCallback(async () => {
     try {
@@ -223,6 +240,77 @@ export function useLearningStore() {
     return lectures.filter(l => l.courseId === courseId).sort((a, b) => a.order - b.order);
   }, [lectures]);
 
+  const createLecture = useCallback(async (
+    courseId: string,
+    data: { title: string; description: string; durationMinutes: number; scheduledAt: string }
+  ) => {
+    try {
+      const courseLectures = lectures.filter(l => l.courseId === courseId);
+      const nextOrder = courseLectures.length + 1;
+
+      const { data: inserted, error } = await supabase.from('lectures').insert({
+        course_id: courseId,
+        title: data.title,
+        description: data.description,
+        order: nextOrder,
+        duration_minutes: data.durationMinutes,
+        scheduled_at: data.scheduledAt,
+        status: 'upcoming',
+      }).select().single();
+
+      if (error) throw error;
+
+      // Notify all enrolled learners
+      const enrolled = enrollments.filter(e => e.courseId === courseId);
+      const course = courses.find(c => c.id === courseId);
+      const notifs: AppNotification[] = enrolled.map(e => ({
+        id: `notif-lec-${inserted.id}-${e.learnerId}`,
+        userId: e.learnerId,
+        type: 'lecture',
+        title: `New Lecture Scheduled: ${data.title}`,
+        message: `${course?.skillName || 'Your course'} — Lecture ${nextOrder}: "${data.title}" is scheduled for ${new Date(data.scheduledAt).toLocaleString()}.`,
+        courseId,
+        lectureId: inserted.id,
+        scheduledAt: data.scheduledAt,
+        read: false,
+        createdAt: new Date().toISOString(),
+      }));
+      _pushNotifications(notifs);
+
+      await refresh();
+      return inserted;
+    } catch (err) {
+      console.error('Error creating lecture:', err);
+    }
+  }, [lectures, enrollments, courses, refresh]);
+
+  const updateLectureSchedule = useCallback(async (lectureId: string, scheduledAt: string) => {
+    try {
+      await supabase.from('lectures').update({ scheduled_at: scheduledAt }).eq('id', lectureId);
+      const lec = lectures.find(l => l.id === lectureId);
+      if (lec) {
+        const enrolled = enrollments.filter(e => e.courseId === lec.courseId);
+        const course = courses.find(c => c.id === lec.courseId);
+        const notifs: AppNotification[] = enrolled.map(e => ({
+          id: `notif-lec-upd-${lectureId}-${e.learnerId}-${Date.now()}`,
+          userId: e.learnerId,
+          type: 'lecture',
+          title: `Lecture Rescheduled: ${lec.title}`,
+          message: `${course?.skillName || 'Your course'} — "${lec.title}" has been rescheduled to ${new Date(scheduledAt).toLocaleString()}.`,
+          courseId: lec.courseId,
+          lectureId,
+          scheduledAt,
+          read: false,
+          createdAt: new Date().toISOString(),
+        }));
+        _pushNotifications(notifs);
+      }
+      await refresh();
+    } catch (err) {
+      console.error('Error updating lecture schedule:', err);
+    }
+  }, [lectures, enrollments, courses, refresh]);
+
   const completeLecture = useCallback(async (courseId: string, lectureId: string, learnerId: string) => {
     try {
       await supabase.from('lecture_attendance').upsert({
@@ -261,6 +349,37 @@ export function useLearningStore() {
   const getExam = useCallback((courseId: string) => {
     return exams.find(e => e.courseId === courseId) || null;
   }, [exams]);
+
+  const scheduleExamDate = useCallback(async (courseId: string, scheduledAt: string) => {
+    try {
+      // Store exam scheduled date in localStorage (since schema may not have the column yet)
+      const key = `ss_exam_schedule_${courseId}`;
+      localStorage.setItem(key, scheduledAt);
+
+      // Notify all enrolled learners
+      const enrolled = enrollments.filter(e => e.courseId === courseId);
+      const course = courses.find(c => c.id === courseId);
+      const exam = exams.find(ex => ex.courseId === courseId);
+      const notifs: AppNotification[] = enrolled.map(e => ({
+        id: `notif-exam-${courseId}-${e.learnerId}-${Date.now()}`,
+        userId: e.learnerId,
+        type: 'exam',
+        title: `Exam Scheduled: ${exam?.title || course?.skillName + ' Final Exam'}`,
+        message: `Your teacher has scheduled the final exam for ${course?.skillName || 'your course'} on ${new Date(scheduledAt).toLocaleString()}. Get ready!`,
+        courseId,
+        scheduledAt,
+        read: false,
+        createdAt: new Date().toISOString(),
+      }));
+      _pushNotifications(notifs);
+    } catch (err) {
+      console.error('Error scheduling exam date:', err);
+    }
+  }, [enrollments, courses, exams]);
+
+  const getExamScheduledAt = useCallback((courseId: string): string | null => {
+    return localStorage.getItem(`ss_exam_schedule_${courseId}`);
+  }, []);
 
   const getExamAttempt = useCallback((courseId: string, learnerId: string) => {
     return examAttempts.find(a => a.learnerId === learnerId) || null;
@@ -339,6 +458,23 @@ export function useLearningStore() {
       console.error(err);
     }
   }, [refresh]);
+
+  /* ─── Notification helpers ─── */
+  const getNotifications = useCallback((userId: string) => {
+    return notifications.filter(n => n.userId === userId).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [notifications]);
+
+  const markNotificationRead = useCallback((notifId: string) => {
+    const updated = notifications.map(n => n.id === notifId ? { ...n, read: true } : n);
+    _saveNotifications(updated);
+  }, [notifications]);
+
+  const markAllNotificationsRead = useCallback((userId: string) => {
+    const updated = notifications.map(n => n.userId === userId ? { ...n, read: true } : n);
+    _saveNotifications(updated);
+  }, [notifications]);
 
   /* ─── Certificate helpers ─── */
   const getCertificateRequests = useCallback((filter?: { teacherId?: string; learnerId?: string }) => {
@@ -508,6 +644,8 @@ export function useLearningStore() {
     // Lectures
     getCourseLectures,
     completeLecture,
+    createLecture,
+    updateLectureSchedule,
     // Exams
     getExam,
     getExamAttempt,
@@ -515,6 +653,8 @@ export function useLearningStore() {
     scheduleExam,
     submitExam,
     markExamResult,
+    scheduleExamDate,
+    getExamScheduledAt,
     // Certificates
     getCertificateRequests,
     requestCertificate,
@@ -525,6 +665,11 @@ export function useLearningStore() {
     generateCertificate,
     verifyCertificate,
     getMyCertificates,
+    // Notifications
+    getNotifications,
+    markNotificationRead,
+    markAllNotificationsRead,
+    notifications,
   };
 }
 

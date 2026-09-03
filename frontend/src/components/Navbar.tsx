@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Bell, LogOut, MapPin, Menu, Sparkles, UserRound, X } from 'lucide-react';
 import { api } from '../utils/api';
 import { Avatar, Button } from './ui/Primitives';
+import NotificationBell from './NotificationBell';
 
 const initialNotifications = [
   { id: 1, title: 'Meera accepted your exchange request', detail: 'Spanish conversation practice starts this week.', time: '12 min ago', read: false },
@@ -186,6 +187,9 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
         <div className="flex items-center gap-2">
           {isAuthenticated ? (
             <>
+              {/* Course/Exam Notifications (scheduling) */}
+              <NotificationBell />
+
               {/* Notifications */}
               <button
                 type="button"
