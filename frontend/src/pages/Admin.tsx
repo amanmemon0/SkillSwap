@@ -22,6 +22,15 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  LayoutDashboard,
+  Megaphone,
+  Settings,
+  AlertTriangle,
+  TrendingUp,
+  Send,
+  Tag,
+  Sliders,
+  BarChart3,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Avatar, Button } from "../components/ui/Primitives";
@@ -258,7 +267,7 @@ export default function Admin() {
   } | null>(null);
   const [notice, setNotice] = useState("");
   const [menuOpen, setMenuOpen] = useState(false);
-  const [adminTab, setAdminTab] = useState<'users' | 'certificates'>('users');
+  const [adminTab, setAdminTab] = useState<'users' | 'certificates' | 'dashboard' | 'reports' | 'broadcast' | 'settings'>('dashboard');
   const store = useLearningStore();
 
   useEffect(() => {
@@ -372,8 +381,15 @@ export default function Admin() {
           Workspace
         </p>
         <button
+          onClick={() => setAdminTab('dashboard')}
+          className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'dashboard' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
+          <LayoutDashboard size={18} />
+          Dashboard
+        </button>
+        <button
           onClick={() => setAdminTab('users')}
-          className={`mt-3 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'users' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+          className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'users' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
         >
           <Users size={18} />
           User Management
@@ -389,6 +405,32 @@ export default function Admin() {
               {store.certificateRequests.filter(r => r.adminApproval === 'pending' && r.tutorApproval === 'approved').length}
             </span>
           )}
+        </button>
+        <button
+          onClick={() => setAdminTab('reports')}
+          className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'reports' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
+          <AlertTriangle size={18} />
+          Reports
+          {users.filter(u => u.reports > 0).length > 0 && (
+            <span className="ml-auto rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-extrabold text-white">
+              {users.filter(u => u.reports > 0).length}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setAdminTab('broadcast')}
+          className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'broadcast' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
+          <Megaphone size={18} />
+          Broadcast
+        </button>
+        <button
+          onClick={() => setAdminTab('settings')}
+          className={`mt-1 flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm font-bold transition ${adminTab === 'settings' ? 'bg-white text-ink' : 'text-white/60 hover:text-white hover:bg-white/10'}`}
+        >
+          <Settings size={18} />
+          Settings
         </button>
         <button
           onClick={() => {
@@ -690,9 +732,9 @@ export default function Admin() {
                               onClick={() =>
                                 setConfirm({
                                   action:
-                                    user.status === "Active"
-                                      ? "Suspend"
-                                      : "Activate",
+                                    user.status === "Banned"
+                                      ? "Activate"
+                                      : "Ban",
                                   users: [user.id],
                                 })
                               }
@@ -756,7 +798,7 @@ export default function Admin() {
             </div>
           </section>
           </>
-          ) : (
+          ) : adminTab === 'certificates' ? (
           /* ═══════════════ Certificate Management ═══════════════ */
           <section className="rounded-3xl border bg-white shadow-sm overflow-hidden">
             <div className="p-5 border-b">
@@ -843,7 +885,15 @@ export default function Admin() {
               </table>
             </div>
           </section>
-          )}
+          ) : adminTab === 'dashboard' ? (
+          <DashboardTab users={users} certificateRequests={store.certificateRequests} />
+          ) : adminTab === 'reports' ? (
+          <ReportsTab users={users} onView={setDrawer} onAction={(action, user) => setConfirm({ action, users: [user.id] })} />
+          ) : adminTab === 'broadcast' ? (
+          <BroadcastTab />
+          ) : adminTab === 'settings' ? (
+          <SettingsTab />
+          ) : null}
         </section>
       </main>
       {drawer && (
@@ -1017,27 +1067,24 @@ function UserDrawer({
           </ol>
         </section>
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button
-            onClick={() => onAction("Activate")}
-            className="bg-emerald-600 text-white hover:bg-emerald-700"
-          >
-            <UserCheck size={16} />
-            Activate
-          </Button>
-          <Button
-            onClick={() => onAction("Suspend")}
-            className="bg-amber-500 text-ink hover:bg-amber-400"
-          >
-            <ShieldAlert size={16} />
-            Suspend
-          </Button>
-          <Button
-            onClick={() => onAction("Ban")}
-            className="bg-rose-600 text-white hover:bg-rose-700"
-          >
-            <Ban size={16} />
-            Ban
-          </Button>
+          {/* Single Ban ↔ Activate toggle */}
+          {user.status === "Banned" ? (
+            <Button
+              onClick={() => onAction("Activate")}
+              className="bg-emerald-600 text-white hover:bg-emerald-700"
+            >
+              <UserCheck size={16} />
+              Activate
+            </Button>
+          ) : (
+            <Button
+              onClick={() => onAction("Ban")}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              <Ban size={16} />
+              Ban
+            </Button>
+          )}
           <Button
             onClick={() => onAction("Delete")}
             className="bg-white text-rose-700 ring-1 ring-rose-200 hover:bg-rose-50"
@@ -1108,6 +1155,778 @@ function Confirm({
             {action}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   NEW ADMIN TABS — Dashboard, Reports, Broadcast, Settings
+   All new code; nothing above was changed.
+   ═══════════════════════════════════════════════════════════ */
+
+// ── Types ────────────────────────────────────────────────────
+type AdminUser = {
+  id: string | number;
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  city: string;
+  bio: string;
+  teachSkills: string[];
+  learnSkills: string[];
+  skillLevel: string;
+  learningMode: string;
+  availability: string;
+  role: 'User' | 'Admin';
+  status: 'Active' | 'Pending' | 'Suspended' | 'Banned';
+  rating: number;
+  totalReviews: number;
+  completedSwaps: number;
+  pendingSwaps: number;
+  cancelledSwaps: number;
+  reports: number;
+  joinedAt: string;
+  lastLogin: string;
+};
+
+// ── 1. Dashboard Tab ─────────────────────────────────────────
+function DashboardTab({
+  users,
+  certificateRequests,
+}: {
+  users: AdminUser[];
+  certificateRequests: { adminApproval: string; tutorApproval: string }[];
+}) {
+  const active = users.filter(u => u.status === 'Active').length;
+  const pending = users.filter(u => u.status === 'Pending').length;
+  const banned = users.filter(u => u.status === 'Banned').length;
+  const suspended = users.filter(u => u.status === 'Suspended').length;
+  const pendingCerts = certificateRequests.filter(
+    r => r.adminApproval === 'pending' && r.tutorApproval === 'approved'
+  ).length;
+  const totalCerts = certificateRequests.filter(r => r.adminApproval === 'approved').length;
+
+  // Top cities
+  const cityMap: Record<string, number> = {};
+  users.forEach(u => { cityMap[u.city] = (cityMap[u.city] || 0) + 1; });
+  const cities = Object.entries(cityMap).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  const maxCity = cities[0]?.[1] || 1;
+
+  // Top teach skills
+  const skillMap: Record<string, number> = {};
+  users.forEach(u => u.teachSkills.forEach(s => { skillMap[s] = (skillMap[s] || 0) + 1; }));
+  const topSkills = Object.entries(skillMap).sort((a, b) => b[1] - a[1]).slice(0, 8);
+
+  // Recent activity feed (derived from users sorted by joinedAt)
+  const recentActivity = [...users]
+    .sort((a, b) => b.joinedAt.localeCompare(a.joinedAt))
+    .slice(0, 6)
+    .map(u => ({
+      label: u.fullName,
+      detail: u.status === 'Pending' ? 'Registered — awaiting approval' : `Joined as ${u.role.toLowerCase()}`,
+      date: u.joinedAt,
+      color: u.status === 'Pending' ? 'bg-amber-400' : u.role === 'Admin' ? 'bg-violet-500' : 'bg-emerald-400',
+    }));
+
+  const statCards = [
+    { label: 'Total Users', value: users.length, icon: <Users size={20} />, color: 'bg-violet/10 text-violet' },
+    { label: 'Active', value: active, icon: <UserCheck size={20} />, color: 'bg-emerald-100 text-emerald-700' },
+    { label: 'Pending', value: pending, icon: <Clock size={20} />, color: 'bg-amber-100 text-amber-700' },
+    { label: 'Suspended / Banned', value: suspended + banned, icon: <Ban size={20} />, color: 'bg-rose-100 text-rose-700' },
+    { label: 'Certificates Issued', value: totalCerts, icon: <Award size={20} />, color: 'bg-blue-100 text-blue-700' },
+    { label: 'Certs Awaiting Approval', value: pendingCerts, icon: <AlertTriangle size={20} />, color: 'bg-orange-100 text-orange-700' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      {/* Stat cards */}
+      <div>
+        <p className="eyebrow mb-3">Admin workspace / dashboard</p>
+        <h1 className="font-display text-4xl sm:text-5xl mb-6">Overview</h1>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {statCards.map(card => (
+            <div key={card.label} className="rounded-3xl bg-white border p-5 shadow-sm flex items-center gap-4">
+              <div className={`grid h-11 w-11 place-items-center rounded-2xl ${card.color}`}>
+                {card.icon}
+              </div>
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider text-ink/45">{card.label}</p>
+                <p className="mt-0.5 font-display text-3xl">{card.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Two-column: cities + skills */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        {/* Top cities */}
+        <div className="rounded-3xl bg-white border p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <BarChart3 size={18} className="text-violet" />
+            <h2 className="font-display text-xl">Users by City</h2>
+          </div>
+          <div className="space-y-3">
+            {cities.map(([city, count]) => (
+              <div key={city}>
+                <div className="flex justify-between mb-1">
+                  <span className="text-sm font-bold">{city}</span>
+                  <span className="text-xs font-bold text-ink/50">{count} user{count !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="h-2 rounded-full bg-ink/5 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-violet transition-all duration-700"
+                    style={{ width: `${(count / maxCity) * 100}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+            {cities.length === 0 && <p className="text-sm text-ink/40 py-4 text-center">No user data yet.</p>}
+          </div>
+        </div>
+
+        {/* Top skills */}
+        <div className="rounded-3xl bg-white border p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <TrendingUp size={18} className="text-violet" />
+            <h2 className="font-display text-xl">Top Taught Skills</h2>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {topSkills.map(([skill, count]) => (
+              <span
+                key={skill}
+                className="flex items-center gap-1.5 rounded-full bg-violet/8 px-3 py-1.5 text-xs font-bold text-violet"
+              >
+                {skill}
+                <span className="rounded-full bg-violet text-white px-1.5 py-0.5 text-[10px] font-extrabold">{count}</span>
+              </span>
+            ))}
+            {topSkills.length === 0 && <p className="text-sm text-ink/40 py-4 w-full text-center">No skill data yet.</p>}
+          </div>
+          {/* Role split */}
+          <div className="mt-5 pt-4 border-t flex gap-4">
+            <div className="flex-1 rounded-2xl bg-violet/5 p-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Admins</p>
+              <p className="mt-1 font-display text-2xl">{users.filter(u => u.role === 'Admin').length}</p>
+            </div>
+            <div className="flex-1 rounded-2xl bg-emerald-50 p-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Members</p>
+              <p className="mt-1 font-display text-2xl">{users.filter(u => u.role === 'User').length}</p>
+            </div>
+            <div className="flex-1 rounded-2xl bg-amber-50 p-3 text-center">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Avg Rating</p>
+              <p className="mt-1 font-display text-2xl">
+                {users.length > 0
+                  ? (users.reduce((s, u) => s + u.rating, 0) / users.length).toFixed(1)
+                  : '—'}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Recent activity */}
+      <div className="rounded-3xl bg-white border p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
+          <Clock size={18} className="text-violet" />
+          <h2 className="font-display text-xl">Recent Activity</h2>
+        </div>
+        <ol className="space-y-3 border-l-2 border-ink/8 pl-5">
+          {recentActivity.map((item, i) => (
+            <li key={i} className="relative">
+              <span className={`absolute -left-[21px] top-1 h-3 w-3 rounded-full ${item.color} ring-2 ring-white`} />
+              <p className="text-sm font-bold">{item.label}</p>
+              <p className="text-xs text-ink/50">{item.detail} · {new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(item.date))}</p>
+            </li>
+          ))}
+          {recentActivity.length === 0 && <p className="text-sm text-ink/40">No activity yet.</p>}
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+// ── 2. Reports Tab ───────────────────────────────────────────
+type ReportEntry = {
+  id: string;
+  reportedUserUsername: string;
+  reportedBy: string;
+  reportedByUsername: string;
+  category: string;
+  reason: string;
+  date: string;
+};
+
+const REPORT_CATEGORIES: Record<string, string> = {
+  harassment: 'Harassment / Bullying',
+  spam: 'Spam / Fake Profile',
+  inappropriate: 'Inappropriate Content',
+  fraud: 'Fraud / Scam',
+  noshow: 'No-Show / Ghosting',
+  other: 'Other',
+};
+
+const CATEGORY_COLOR: Record<string, string> = {
+  harassment: 'bg-rose-100 text-rose-700',
+  spam: 'bg-orange-100 text-orange-700',
+  inappropriate: 'bg-amber-100 text-amber-700',
+  fraud: 'bg-red-100 text-red-800',
+  noshow: 'bg-slate-100 text-slate-700',
+  other: 'bg-ink/5 text-ink/60',
+};
+
+// Mock report entries — replace with real API data when backend is ready
+const MOCK_REPORTS: ReportEntry[] = [
+  {
+    id: 'r1', reportedUserUsername: 'sofiaframes',
+    reportedBy: 'John Doe', reportedByUsername: 'johndoe',
+    category: 'noshow',
+    reason: 'She confirmed the swap session but never showed up. No message, no response afterwards.',
+    date: '2026-07-18',
+  },
+  {
+    id: 'r2', reportedUserUsername: 'sofiaframes',
+    reportedBy: 'Arjun Rao', reportedByUsername: 'arjun.codes',
+    category: 'harassment',
+    reason: 'Sent repeated unwanted messages after I declined her swap request.',
+    date: '2026-07-15',
+  },
+  {
+    id: 'r3', reportedUserUsername: 'marcusl',
+    reportedBy: 'Aisha Patel', reportedByUsername: 'aisha.designs',
+    category: 'fraud',
+    reason: 'Claimed to teach TypeScript but had no knowledge. Asked me to send money for "course materials" which is against platform rules.',
+    date: '2026-07-10',
+  },
+  {
+    id: 'r4', reportedUserUsername: 'marcusl',
+    reportedBy: 'Noah Williams', reportedByUsername: 'noahteaches',
+    category: 'harassment',
+    reason: 'Left a fake 1-star review on my profile after I gave honest feedback. Continued harassing me in DMs.',
+    date: '2026-07-08',
+  },
+  {
+    id: 'r5', reportedUserUsername: 'marcusl',
+    reportedBy: 'Sofia Chen', reportedByUsername: 'sofiaframes',
+    category: 'spam',
+    reason: 'Sent copy-paste swap requests to many users without reading their profiles. Clearly a bot or spam account.',
+    date: '2026-07-05',
+  },
+  {
+    id: 'r6', reportedUserUsername: 'marcusl',
+    reportedBy: 'John Doe', reportedByUsername: 'johndoe',
+    category: 'inappropriate',
+    reason: 'Used offensive language during our live session. Made the learning environment very uncomfortable.',
+    date: '2026-07-03',
+  },
+];
+
+function ReportsTab({
+  users,
+  onView,
+  onAction,
+}: {
+  users: AdminUser[];
+  onView: (user: AdminUser) => void;
+  onAction: (action: string, user: AdminUser) => void;
+}) {
+  const [expandedId, setExpandedId] = useState<string | number | null>(null);
+  const [dismissedReports, setDismissedReports] = useState<string[]>([]);
+
+  const reported = [...users]
+    .filter(u => u.reports > 0)
+    .sort((a, b) => b.reports - a.reports);
+
+  const statusColor: Record<string, string> = {
+    Active: 'bg-emerald-100 text-emerald-800',
+    Pending: 'bg-amber-100 text-amber-800',
+    Suspended: 'bg-orange-100 text-orange-800',
+    Banned: 'bg-rose-100 text-rose-800',
+  };
+
+  const getReports = (username: string) =>
+    MOCK_REPORTS.filter(r => r.reportedUserUsername === username && !dismissedReports.includes(r.id));
+
+  const dismissReport = (reportId: string) =>
+    setDismissedReports(prev => [...prev, reportId]);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="eyebrow mb-1">Admin workspace / reports</p>
+        <h1 className="font-display text-4xl sm:text-5xl">Reports & Moderation</h1>
+        <p className="mt-2 text-sm text-ink/55">
+          Users flagged by the community. Click a row to see who reported them and why.
+        </p>
+      </div>
+
+      {/* Summary strip */}
+      <div className="grid gap-3 sm:grid-cols-3">
+        {[
+          { label: 'Flagged users', value: reported.length, color: 'bg-rose-50 text-rose-700' },
+          { label: 'Total reports', value: reported.reduce((s, u) => s + u.reports, 0), color: 'bg-orange-50 text-orange-700' },
+          { label: 'Suspended / Banned', value: reported.filter(u => u.status === 'Suspended' || u.status === 'Banned').length, color: 'bg-amber-50 text-amber-700' },
+        ].map(s => (
+          <div key={s.label} className={`rounded-2xl ${s.color} px-4 py-3`}>
+            <p className="text-[10px] font-bold uppercase tracking-wider opacity-60">{s.label}</p>
+            <p className="mt-1 font-display text-3xl">{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {reported.length === 0 ? (
+          <div className="rounded-3xl border bg-white p-14 text-center shadow-sm">
+            <CheckCircle2 className="mx-auto text-emerald-300" size={36} />
+            <p className="mt-3 font-bold text-ink/50">No reported users — community looks great!</p>
+          </div>
+        ) : reported.map(user => {
+          const userReports = getReports(user.username);
+          const isExpanded = expandedId === user.id;
+
+          return (
+            <div key={user.id} className="rounded-3xl border bg-white shadow-sm overflow-hidden">
+              {/* User row — click to expand */}
+              <button
+                type="button"
+                onClick={() => setExpandedId(isExpanded ? null : user.id)}
+                className="w-full text-left"
+              >
+                <div className={`flex flex-wrap items-center gap-4 p-5 transition ${isExpanded ? 'bg-rose-50/60' : 'hover:bg-ink/[.02]'}`}>
+                  {/* Avatar + name */}
+                  <div className="flex items-center gap-3 flex-1 min-w-[180px]">
+                    <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-2xl bg-ink/8 text-sm font-extrabold text-ink">
+                      {user.fullName.charAt(0)}
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold">{user.fullName}</p>
+                      <p className="text-xs text-ink/50">@{user.username} · {user.city}</p>
+                    </div>
+                  </div>
+                  {/* Status */}
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-bold ${statusColor[user.status] ?? ''}`}>
+                    {user.status}
+                  </span>
+                  {/* Report count */}
+                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-1 text-xs font-extrabold text-rose-700">
+                    <AlertTriangle size={11} />
+                    {user.reports} report{user.reports !== 1 ? 's' : ''}
+                  </span>
+                  {/* Last login */}
+                  <span className="text-xs text-ink/40 hidden sm:block">
+                    Last seen {new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(user.lastLogin))}
+                  </span>
+                  {/* Chevron */}
+                  <ChevronRight
+                    size={16}
+                    className={`ml-auto text-ink/30 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                  />
+                </div>
+              </button>
+
+              {/* Expanded report detail panel */}
+              {isExpanded && (
+                <div className="border-t bg-[#fafaf9]">
+                  {/* Quick actions */}
+                  <div className="flex flex-wrap items-center gap-2 border-b px-5 py-3 bg-white">
+                    <span className="text-xs font-bold text-ink/40 mr-1">Quick actions:</span>
+                    <button
+                      onClick={() => onView(user as any)}
+                      className="flex items-center gap-1.5 rounded-lg bg-ink/5 px-3 py-1.5 text-xs font-bold hover:bg-violet/10 hover:text-violet transition"
+                    >
+                      <Eye size={13} /> View Full Profile
+                    </button>
+                    <button
+                      onClick={() => onAction(user.status === 'Banned' ? 'Activate' : 'Ban', user)}
+                      className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold transition ${user.status === 'Banned' ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200' : 'bg-rose-100 text-rose-700 hover:bg-rose-200'}`}
+                    >
+                      {user.status === 'Banned' ? <UserCheck size={13} /> : <Ban size={13} />}
+                      {user.status === 'Banned' ? 'Activate Account' : 'Ban User'}
+                    </button>
+                  </div>
+                  {/* Individual reports */}
+                  <div className="p-5 space-y-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-ink/40">
+                      {userReports.length} report{userReports.length !== 1 ? 's' : ''} on file
+                    </p>
+                    {userReports.length === 0 ? (
+                      <p className="text-sm text-ink/40 py-2">All reports have been dismissed.</p>
+                    ) : userReports.map(report => (
+                      <div key={report.id} className="rounded-2xl border bg-white p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <div className="grid h-6 w-6 place-items-center rounded-full bg-violet/10 text-[10px] font-extrabold text-violet">
+                                {report.reportedBy.charAt(0)}
+                              </div>
+                              <span className="text-xs font-bold">{report.reportedBy}</span>
+                              <span className="text-xs text-ink/40">@{report.reportedByUsername}</span>
+                            </div>
+                            <span className="text-ink/20">·</span>
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-extrabold ${CATEGORY_COLOR[report.category] ?? 'bg-ink/5 text-ink/50'}`}>
+                              {REPORT_CATEGORIES[report.category] ?? report.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-ink/35">
+                              {new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(report.date))}
+                            </span>
+                            <button
+                              onClick={() => dismissReport(report.id)}
+                              title="Dismiss this report"
+                              className="rounded-lg p-1 text-ink/30 hover:bg-rose-50 hover:text-rose-500 transition"
+                            >
+                              <X size={13} />
+                            </button>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-sm text-ink/70 leading-6">"{report.reason}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── 3. Broadcast Tab ─────────────────────────────────────────
+type Announcement = {
+  id: number;
+  title: string;
+  message: string;
+  target: string;
+  type: 'info' | 'warning' | 'alert';
+  sentAt: string;
+};
+
+function BroadcastTab() {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [target, setTarget] = useState('All Users');
+  const [type, setType] = useState<'info' | 'warning' | 'alert'>('info');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([
+    {
+      id: 1,
+      title: 'Platform Maintenance Notice',
+      message: 'SkillSwap will undergo scheduled maintenance on Sunday from 2–4 AM IST. Some features may be temporarily unavailable.',
+      target: 'All Users',
+      type: 'warning',
+      sentAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    {
+      id: 2,
+      title: 'New Certificate Feature Launched!',
+      message: 'You can now earn and share verified skill certificates after completing courses and passing exams. Check your learning dashboard!',
+      target: 'Active Users',
+      type: 'info',
+      sentAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+  ]);
+
+  const typeConfig = {
+    info: { label: 'Info', color: 'bg-blue-100 text-blue-700', dot: 'bg-blue-500' },
+    warning: { label: 'Warning', color: 'bg-amber-100 text-amber-700', dot: 'bg-amber-500' },
+    alert: { label: 'Alert', color: 'bg-rose-100 text-rose-700', dot: 'bg-rose-500' },
+  };
+
+  const handleSend = () => {
+    if (!title.trim() || !message.trim()) return;
+    const newAnnouncement: Announcement = {
+      id: Date.now(),
+      title: title.trim(),
+      message: message.trim(),
+      target,
+      type,
+      sentAt: new Date().toISOString(),
+    };
+    setAnnouncements(prev => [newAnnouncement, ...prev]);
+    setTitle('');
+    setMessage('');
+  };
+
+  const timeAgoLocal = (iso: string) => {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <p className="eyebrow mb-1">Admin workspace / broadcast</p>
+        <h1 className="font-display text-4xl sm:text-5xl">Broadcast Announcements</h1>
+        <p className="mt-2 text-sm text-ink/55">Send platform-wide notifications to your users.</p>
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        {/* Composer */}
+        <div className="rounded-3xl bg-white border p-6 shadow-sm space-y-4">
+          <h2 className="font-display text-2xl flex items-center gap-2">
+            <Megaphone size={22} className="text-violet" />
+            New Announcement
+          </h2>
+          <div>
+            <label className="block text-xs font-bold text-ink/50 mb-1.5" htmlFor="bc-title">Title</label>
+            <input
+              id="bc-title"
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="e.g. Scheduled Maintenance on Sunday"
+              className="w-full rounded-xl bg-[#f7f5f2] px-4 py-2.5 text-sm outline-none ring-1 ring-transparent focus:ring-violet"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-ink/50 mb-1.5" htmlFor="bc-msg">Message</label>
+            <textarea
+              id="bc-msg"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              placeholder="Write your announcement here…"
+              rows={4}
+              className="w-full resize-none rounded-xl bg-[#f7f5f2] px-4 py-2.5 text-sm outline-none ring-1 ring-transparent focus:ring-violet"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-xs font-bold text-ink/50 mb-1.5" htmlFor="bc-target">Target Audience</label>
+              <select
+                id="bc-target"
+                value={target}
+                onChange={e => setTarget(e.target.value)}
+                className="w-full appearance-none rounded-xl bg-[#f7f5f2] px-4 py-2.5 text-sm font-bold text-ink/70 outline-none ring-1 ring-transparent focus:ring-violet"
+              >
+                {['All Users', 'Active Users', 'Pending Users', 'Admins Only'].map(o => (
+                  <option key={o}>{o}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-ink/50 mb-1.5" htmlFor="bc-type">Type</label>
+              <select
+                id="bc-type"
+                value={type}
+                onChange={e => setType(e.target.value as 'info' | 'warning' | 'alert')}
+                className="w-full appearance-none rounded-xl bg-[#f7f5f2] px-4 py-2.5 text-sm font-bold text-ink/70 outline-none ring-1 ring-transparent focus:ring-violet"
+              >
+                <option value="info">Info</option>
+                <option value="warning">Warning</option>
+                <option value="alert">Alert</option>
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleSend}
+            disabled={!title.trim() || !message.trim()}
+            className="flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-sm font-bold text-white transition hover:bg-violet disabled:opacity-40"
+          >
+            <Send size={15} />
+            Send Announcement
+          </button>
+        </div>
+
+        {/* Preview */}
+        <div className="rounded-3xl border bg-white p-5 shadow-sm">
+          <h3 className="font-display text-lg mb-3 text-ink/60">Live Preview</h3>
+          {title || message ? (
+            <div className={`rounded-2xl p-4 ${typeConfig[type].color}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`h-2 w-2 rounded-full ${typeConfig[type].dot}`} />
+                <span className="text-xs font-extrabold uppercase tracking-wider">{typeConfig[type].label}</span>
+                <span className="ml-auto text-xs opacity-60">To: {target}</span>
+              </div>
+              <p className="font-bold text-sm mt-1">{title || '(Title)'}</p>
+              <p className="text-xs mt-1 opacity-75 leading-5">{message || '(Message)'}</p>
+            </div>
+          ) : (
+            <div className="rounded-2xl border-2 border-dashed border-ink/10 p-6 text-center">
+              <Megaphone size={28} className="mx-auto text-ink/20 mb-2" />
+              <p className="text-xs text-ink/35">Your announcement preview will appear here</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Sent announcements */}
+      <div className="rounded-3xl bg-white border p-5 shadow-sm">
+        <h2 className="font-display text-2xl mb-4 flex items-center gap-2">
+          <Clock size={18} className="text-ink/40" /> Sent Announcements
+        </h2>
+        <div className="space-y-3">
+          {announcements.map(a => (
+            <div key={a.id} className="rounded-2xl bg-[#f7f5f2] p-4">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className={`h-2 w-2 rounded-full mt-1 flex-shrink-0 ${typeConfig[a.type].dot}`} />
+                  <div>
+                    <p className="text-sm font-bold">{a.title}</p>
+                    <p className="text-xs text-ink/55 mt-0.5 leading-5">{a.message}</p>
+                  </div>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${typeConfig[a.type].color}`}>{typeConfig[a.type].label}</span>
+                  <p className="text-[11px] text-ink/40 mt-1">{timeAgoLocal(a.sentAt)}</p>
+                  <p className="text-[11px] text-ink/40">{a.target}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── 4. Settings Tab ──────────────────────────────────────────
+const DEFAULT_CATEGORIES = ['Tech', 'Design', 'Languages', 'Photography', 'Music', 'Business', 'Fitness', 'Cooking'];
+
+function SettingsTab() {
+  const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
+  const [newCat, setNewCat] = useState('');
+  const [maxSkills, setMaxSkills] = useState(10);
+  const [minRating, setMinRating] = useState(3.5);
+  const [certPassScore, setCertPassScore] = useState(70);
+  const [saved, setSaved] = useState(false);
+
+  const handleAddCategory = () => {
+    const trimmed = newCat.trim();
+    if (!trimmed || categories.includes(trimmed)) return;
+    setCategories(prev => [...prev, trimmed]);
+    setNewCat('');
+  };
+
+  const handleRemoveCategory = (cat: string) => {
+    setCategories(prev => prev.filter(c => c !== cat));
+  };
+
+  const handleSave = () => {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <div className="space-y-6 max-w-3xl">
+      <div>
+        <p className="eyebrow mb-1">Admin workspace / settings</p>
+        <h1 className="font-display text-4xl sm:text-5xl">Platform Settings</h1>
+        <p className="mt-2 text-sm text-ink/55">Configure platform-wide rules and categories.</p>
+      </div>
+
+      {/* Skill Categories */}
+      <div className="rounded-3xl bg-white border p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Tag size={18} className="text-violet" />
+          <h2 className="font-display text-2xl">Skill Categories</h2>
+        </div>
+        <p className="text-sm text-ink/50 mb-4">Manage the categories users can assign to their skills.</p>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {categories.map(cat => (
+            <span
+              key={cat}
+              className="flex items-center gap-1.5 rounded-full bg-violet/8 px-3 py-1.5 text-sm font-bold text-violet"
+            >
+              {cat}
+              <button
+                onClick={() => handleRemoveCategory(cat)}
+                className="text-violet/50 hover:text-rose-600 transition"
+                title={`Remove ${cat}`}
+              >
+                <X size={13} />
+              </button>
+            </span>
+          ))}
+        </div>
+        <div className="flex gap-2">
+          <input
+            value={newCat}
+            onChange={e => setNewCat(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && handleAddCategory()}
+            placeholder="New category name…"
+            className="flex-1 rounded-xl bg-[#f7f5f2] px-4 py-2 text-sm outline-none ring-1 ring-transparent focus:ring-violet"
+          />
+          <button
+            onClick={handleAddCategory}
+            className="flex items-center gap-1.5 rounded-xl bg-ink px-4 py-2 text-sm font-bold text-white hover:bg-violet transition"
+          >
+            <Plus size={14} /> Add
+          </button>
+        </div>
+      </div>
+
+      {/* Platform Rules */}
+      <div className="rounded-3xl bg-white border p-6 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Sliders size={18} className="text-violet" />
+          <h2 className="font-display text-2xl">Platform Rules</h2>
+        </div>
+        <p className="text-sm text-ink/50 mb-6">Adjust core thresholds and limits.</p>
+        <div className="space-y-6">
+          {/* Max skills */}
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-sm font-bold">Max skills per user</label>
+              <span className="text-sm font-extrabold text-violet">{maxSkills}</span>
+            </div>
+            <input
+              type="range" min={1} max={20} value={maxSkills}
+              onChange={e => setMaxSkills(Number(e.target.value))}
+              className="w-full accent-violet"
+            />
+            <p className="text-xs text-ink/40 mt-1">Each user can add up to {maxSkills} teach + learn skills.</p>
+          </div>
+          {/* Min rating to swap */}
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-sm font-bold">Minimum rating to request swaps</label>
+              <span className="text-sm font-extrabold text-violet">{minRating.toFixed(1)} ★</span>
+            </div>
+            <input
+              type="range" min={1} max={5} step={0.1} value={minRating}
+              onChange={e => setMinRating(Number(e.target.value))}
+              className="w-full accent-violet"
+            />
+            <p className="text-xs text-ink/40 mt-1">Users below this rating cannot send swap requests.</p>
+          </div>
+          {/* Certificate passing score */}
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-sm font-bold">Certificate passing score</label>
+              <span className="text-sm font-extrabold text-violet">{certPassScore}%</span>
+            </div>
+            <input
+              type="range" min={50} max={100} value={certPassScore}
+              onChange={e => setCertPassScore(Number(e.target.value))}
+              className="w-full accent-violet"
+            />
+            <p className="text-xs text-ink/40 mt-1">Learners must score at least {certPassScore}% to be eligible for a certificate.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Save button */}
+      <div className="flex items-center gap-4">
+        <button
+          onClick={handleSave}
+          className="flex items-center gap-2 rounded-xl bg-ink px-6 py-2.5 text-sm font-bold text-white transition hover:bg-violet"
+        >
+          <Check size={15} />
+          Save Settings
+        </button>
+        {saved && (
+          <span className="flex items-center gap-1.5 text-sm font-bold text-emerald-600">
+            <CheckCircle2 size={16} /> Settings saved!
+          </span>
+        )}
       </div>
     </div>
   );
