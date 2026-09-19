@@ -12,7 +12,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { EmptyState } from '../components/ui/EmptyState';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -27,7 +27,7 @@ const sideLinks = [
 export default function MyLearning() {
   const nav = useNavigate();
   const store = useLearningStore();
-  const myEnrollments = store.getMyLearning(CURRENT_USER_ID);
+  const myEnrollments = store.getMyLearning();
 
   return (
     <main className="min-h-screen bg-surface">
@@ -83,7 +83,7 @@ export default function MyLearning() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 {myEnrollments.map((enrollment, i) => {
-                  const course = mockCourses.find(c => c.id === enrollment.courseId);
+                  const course = store.courses.find(c => c.id === enrollment.courseId);
                   if (!course) return null;
                   const nextLecture = store.getCourseLectures(course.id).find(l => l.status !== 'completed');
                   return (

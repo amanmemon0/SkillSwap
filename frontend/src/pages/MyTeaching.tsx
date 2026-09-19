@@ -10,7 +10,7 @@ import { motion } from 'framer-motion';
 import { Avatar, Button, SkillTag } from '../components/ui/Primitives';
 import { EmptyState } from '../components/ui/EmptyState';
 import Navbar from '../components/Navbar';
-import { useLearningStore, CURRENT_USER_ID } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -25,7 +25,7 @@ const sideLinks = [
 export default function MyTeaching() {
   const nav = useNavigate();
   const store = useLearningStore();
-  const myCourses = store.getMyTeachingCourses(CURRENT_USER_ID);
+  const myCourses = store.getMyTeachingCourses();
 
   return (
     <main className="min-h-screen bg-surface">
@@ -85,7 +85,7 @@ export default function MyTeaching() {
                   const lectures = store.getCourseLectures(course.id);
                   const upcomingLectures = lectures.filter(l => l.status === 'upcoming').length;
                   const examRequests = enrollments.filter(e => e.examStatus === 'requested').length;
-                  const certRequests = store.getCertificateRequests({ teacherId: CURRENT_USER_ID })
+                  const certRequests = store.getCertificateRequests({ teacherId: store.currentUserId })
                     .filter(r => r.courseId === course.id && r.tutorApproval === 'pending').length;
 
                   return (

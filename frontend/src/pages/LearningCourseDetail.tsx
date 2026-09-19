@@ -14,7 +14,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID, CURRENT_USER_NAME } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 export default function LearningCourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -27,11 +27,22 @@ export default function LearningCourseDetail() {
   const [hoveredStar, setHoveredStar] = useState(0);
   const [selectedStar, setSelectedStar] = useState(0);
 
-  const course = mockCourses.find(c => c.id === courseId);
-  const enrollment = course ? store.getEnrollment(course.id, CURRENT_USER_ID) : null;
+  const course = store.courses.find(c => c.id === courseId);
+  const enrollment = course ? store.getEnrollment(course.id) : null;
   const lectures = course ? store.getCourseLectures(course.id) : [];
-  const certReqs = store.getCertificateRequests({ learnerId: CURRENT_USER_ID });
+  const certReqs = store.getCertificateRequests({ learnerId: store.currentUserId });
   const certReq = certReqs.find(r => r.courseId === courseId);
+
+  if (store.loading) {
+    return (
+      <main className="min-h-screen bg-surface">
+        <Navbar variant="auth" />
+        <div className="flex items-center justify-center py-32">
+          <p className="text-ink/60 font-medium">Loading course details...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!course || !enrollment) {
     return (
@@ -51,13 +62,13 @@ export default function LearningCourseDetail() {
   const canRequestCert = examPassed && enrollment.certificateStatus === 'eligible';
 
   const handleRequestExam = () => {
-    store.requestExam(course.id, CURRENT_USER_ID, CURRENT_USER_NAME);
+    store.requestExam(course.id);
     setShowExamRequest(false);
     show('Exam request sent to your tutor!', 'success');
   };
 
   const handleRequestCert = () => {
-    store.requestCertificate(course.id, CURRENT_USER_ID, CURRENT_USER_NAME);
+    store.requestCertificate(course.id);
     setShowCertRequest(false);
     show('Certificate request sent!', 'success');
   };

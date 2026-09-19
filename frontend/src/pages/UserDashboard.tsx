@@ -26,7 +26,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import LiveFeed from '../components/LiveFeed';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 import { supabase } from '../auth/supabaseClient';
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -75,18 +75,14 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!userId) return;
-    const fetchExchanges = async () => {
+    const fetchExchangesAndMetrics = async () => {
       try {
-        const { data: dbExchanges } = await supabase
-          .from('exchanges')
-          .select(`
-            *,
-            sender:sender_id (full_name),
-            receiver:receiver_id (full_name)
-          `)
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+        const [data, user] = await Promise.all([
+          api.getExchanges(),
+          api.getMe(),
+        ]);
         
-        const mapped = (dbExchanges || []).map(ex => {
+        const mapped = (data || []).map((ex: any) => {
           const isSender = ex.sender_id === userId;
           const partnerName = isSender ? ex.receiver?.full_name : ex.sender?.full_name;
           return {
@@ -99,6 +95,18 @@ export default function UserDashboard() {
           };
         });
         setExchanges(mapped.slice(0, 2));
+
+        const activeCount = (data || []).filter((e: any) => e.status === 'matched' || e.status === 'pending').length;
+        const completedCount = (data || []).filter((e: any) => e.status === 'completed').length;
+        const offerCount = user?.primary_skill ? 1 : 0;
+        const learnCount = Array.isArray(user?.learning_skills) ? user.learning_skills.length : 0;
+
+        setProfileMetrics({
+          skillsOffered: offerCount,
+          skillsWanted: learnCount,
+          activeExchanges: activeCount,
+          completedSwaps: completedCount
+        });
       } catch (err) {
         console.error(err);
       }
@@ -106,13 +114,10 @@ export default function UserDashboard() {
 
     const fetchMatches = async () => {
       try {
-        const { data: dbProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', userId)
-          .limit(3);
+        const allProfiles = await api.getProfiles();
+        const dbProfiles = (allProfiles || []).filter((p: any) => p.id !== userId).slice(0, 3);
         
-        const mapped = (dbProfiles || []).map(p => ({
+        const mapped = dbProfiles.map((p: any) => ({
           name: p.full_name || 'Neighbour',
           skill: p.primary_skill || 'Various Skills',
           distance: '1.2 km away',
@@ -126,40 +131,8 @@ export default function UserDashboard() {
       }
     };
 
-    const fetchMetrics = async () => {
-      try {
-        const { count: offerCount } = await supabase
-          .from('member_skills')
-          .select('*', { count: 'exact', head: true })
-          .eq('profile_id', userId)
-          .eq('type', 'offer');
-
-        const { count: learnCount } = await supabase
-          .from('member_skills')
-          .select('*', { count: 'exact', head: true })
-          .eq('profile_id', userId)
-          .eq('type', 'learn');
-
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('completed_swaps, pending_swaps')
-          .eq('id', userId)
-          .single();
-
-        setProfileMetrics({
-          skillsOffered: (offerCount || 0) + 1,
-          skillsWanted: learnCount || 0,
-          activeExchanges: prof?.pending_swaps || 0,
-          completedSwaps: prof?.completed_swaps || 0
-        });
-      } catch (err) {
-        console.error(err);
-      }
-    };
-
-    fetchExchanges();
+    fetchExchangesAndMetrics();
     fetchMatches();
-    fetchMetrics();
   }, [userId]);
 
   const displayName = profile?.full_name || 'Member';
@@ -398,7 +371,7 @@ export default function UserDashboard() {
               {myLearning.length > 0 ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   {myLearning.map(enrollment => {
-                    const course = mockCourses.find(c => c.id === enrollment.courseId);
+                    const course = store.courses.find(c => c.id === enrollment.courseId);
                     if (!course) return null;
                     return (
                       <div

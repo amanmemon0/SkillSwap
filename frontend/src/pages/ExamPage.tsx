@@ -11,16 +11,16 @@ import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID, CURRENT_USER_NAME } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 export default function ExamPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const nav = useNavigate();
   const store = useLearningStore();
 
-  const course = mockCourses.find(c => c.id === courseId);
+  const course = store.courses.find(c => c.id === courseId);
   const exam = course ? store.getExam(course.id) : null;
-  const enrollment = course ? store.getEnrollment(course.id, CURRENT_USER_ID) : null;
+  const enrollment = course ? store.getEnrollment(course.id) : null;
 
   const [currentQ, setCurrentQ] = useState(0);
   const [answers, setAnswers] = useState<(number | null)[]>([]);
@@ -69,7 +69,7 @@ export default function ExamPage() {
 
   const handleSubmit = useCallback(async () => {
     if (!exam) return;
-    const r = await store.submitExam(course!.id, CURRENT_USER_ID, CURRENT_USER_NAME, answers);
+    const r = await store.submitExam(course!.id, store.currentUserId, store.currentUserName, answers);
     if (r) {
       setResult(r);
       setSubmitted(true);

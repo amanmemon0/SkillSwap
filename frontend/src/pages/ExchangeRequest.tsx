@@ -5,22 +5,10 @@ import { ArrowLeft, Check, Calendar, Clock, Send } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, ExchangeVis } from '../components/ui/Primitives';
 import { api } from '../utils/api';
-import { supabase } from '../auth/supabaseClient';
 
 export default function ExchangeRequest() {
   const location = useLocation();
-  const matchedUser = location.state?.matchedUser;
-
-  // Fallback matchedUser if no navigation state exists
-  const fallbackUser = {
-    id: '11111111-1111-1111-1111-111111111111', // Meera Iyer
-    full_name: 'Meera Iyer',
-    location: 'Chennai',
-    primary_skill: 'Spoken English',
-    learning_skills: ['Cooking']
-  };
-
-  const targetUser = matchedUser || fallbackUser;
+  const [targetUser, setTargetUser] = useState<any>(location.state?.matchedUser || null);
 
   const [message, setMessage] = useState(
     `Hi! I can help you learn and would love to exchange skills with you. Are you available this weekend?`
@@ -36,32 +24,47 @@ export default function ExchangeRequest() {
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    const loadSkills = async () => {
+    const loadSkillsAndUsers = async () => {
       try {
         const me = await api.getMe();
-        const { data: myProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', me._id)
-          .single();
+        const myProfile = {
+          id: me._id,
+          full_name: me.name,
+          location: me.location,
+          primary_skill: me.primary_skill,
+          learning_skills: me.learning_skills,
+          skill_level: me.skill_level,
+          bio: me.bio,
+        };
         setCurrentUser(myProfile);
 
-        const { data: dbSkills } = await supabase
-          .from('skills')
-          .select('id, name');
+        let partner = location.state?.matchedUser;
+        if (!partner) {
+          const allProfiles = await api.getProfiles();
+          partner = (allProfiles || []).find((p: any) => p.id !== me._id);
+        }
+        setTargetUser(partner);
 
-        if (dbSkills) {
-          const mySkillName = myProfile?.primary_skill;
-          let mySkill = dbSkills.find(s => s.name.toLowerCase() === mySkillName?.toLowerCase() || s.name.toLowerCase().includes(mySkillName?.toLowerCase()));
-          if (!mySkill && dbSkills.length > 0) {
-            mySkill = dbSkills[0];
-          }
+        const dbSkills = await api.getSkills();
+
+        if (dbSkills && dbSkills.length > 0) {
+          const mySkillName = (myProfile?.primary_skill || '').toLowerCase();
+          let mySkill = dbSkills.find(s => 
+            s.name.toLowerCase() === mySkillName ||
+            s.name.toLowerCase().includes(mySkillName) ||
+            (mySkillName && mySkillName.includes(s.name.toLowerCase()))
+          );
+          if (!mySkill) mySkill = dbSkills[0];
           if (mySkill) setSenderSkillId(mySkill.id);
 
-          const theirSkillName = targetUser.primary_skill;
-          let theirSkill = dbSkills.find(s => s.name.toLowerCase() === theirSkillName?.toLowerCase() || s.name.toLowerCase().includes(theirSkillName?.toLowerCase()));
-          if (!theirSkill && dbSkills.length > 0) {
-            theirSkill = dbSkills[Math.min(1, dbSkills.length - 1)];
+          const theirSkillName = (partner?.primary_skill || partner?.skillOffered || '').toLowerCase();
+          let theirSkill = dbSkills.find(s => 
+            s.name.toLowerCase() === theirSkillName ||
+            s.name.toLowerCase().includes(theirSkillName) ||
+            (theirSkillName && theirSkillName.includes(s.name.toLowerCase()))
+          );
+          if (!theirSkill) {
+            theirSkill = dbSkills.find(s => s.id !== mySkill?.id) || dbSkills[0];
           }
           if (theirSkill) setReceiverSkillId(theirSkill.id);
         }
@@ -71,11 +74,16 @@ export default function ExchangeRequest() {
         setLoading(false);
       }
     };
-    loadSkills();
-  }, [targetUser.primary_skill]);
+    loadSkillsAndUsers();
+  }, [location.state?.matchedUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const partnerId = targetUser?.id || targetUser?._id;
+    if (!partnerId) {
+      setErrorMsg('No recipient selected for exchange.');
+      return;
+    }
     if (!senderSkillId || !receiverSkillId) {
       setErrorMsg('Unable to determine skill IDs. Make sure both users have valid skills.');
       return;
@@ -83,7 +91,7 @@ export default function ExchangeRequest() {
     setErrorMsg('');
     try {
       await api.createExchange({
-        receiverId: targetUser.id,
+        receiverId: partnerId,
         senderSkillId,
         receiverSkillId,
         message: `${message} [Mode: ${mode}]` + (date ? ` on ${date}` : '') + (time ? ` at ${time}` : '')
@@ -110,7 +118,7 @@ export default function ExchangeRequest() {
             </div>
             <h2 className="mt-6 font-display text-3xl font-bold">Request Sent! 🎉</h2>
             <p className="mt-3 text-ink/55">
-              Your skill swap request has been sent to {targetUser.full_name}. You'll be notified when they respond.
+              Your skill swap request has been sent to {targetUser?.full_name || targetUser?.name || 'Partner'}. You'll be notified when they respond.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link to="/dashboard">
@@ -129,6 +137,21 @@ export default function ExchangeRequest() {
       </main>
     );
   }
+
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-surface text-ink">
+        <Navbar />
+        <div className="flex justify-center py-32">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet border-t-transparent" />
+        </div>
+      </main>
+    );
+  }
+
+  const partnerName = targetUser?.full_name || targetUser?.name || 'Partner';
+  const partnerSkill = targetUser?.primary_skill || targetUser?.skillOffered || 'Skill';
+  const partnerLocation = targetUser?.location || 'Nearby';
 
   return (
     <main className="min-h-screen bg-surface text-ink">
@@ -160,10 +183,10 @@ export default function ExchangeRequest() {
           >
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <Avatar name={targetUser.full_name} size="lg" showStatus status="online" />
+                <Avatar name={partnerName} size="lg" showStatus status="online" />
                 <div>
-                  <h3 className="font-bold">{targetUser.full_name}</h3>
-                  <p className="text-xs text-ink/50">{targetUser.location} · 🟢 Online</p>
+                  <h3 className="font-bold">{partnerName}</h3>
+                  <p className="text-xs text-ink/50">{partnerLocation} · 🟢 Online</p>
                 </div>
               </div>
               <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
@@ -173,7 +196,7 @@ export default function ExchangeRequest() {
 
             <ExchangeVis 
               yourSkill={currentUser?.primary_skill || 'Your Skill'} 
-              theirSkill={targetUser.primary_skill} 
+              theirSkill={partnerSkill} 
             />
           </motion.div>
 

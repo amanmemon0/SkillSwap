@@ -5,7 +5,7 @@ import { Filter, MapPin, Search, SlidersHorizontal, Star, X } from 'lucide-react
 import Navbar from '../components/Navbar';
 import { Avatar, Button, MatchScore, SkillTag, StatusDot } from '../components/ui/Primitives';
 import { exploreCategories, getSkillCategory } from '../data/mock';
-import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
 
 export default function ExploreSkills() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -24,9 +24,7 @@ export default function ExploreSkills() {
   useEffect(() => {
     const fetchProfiles = async () => {
       try {
-        const { data: dbProfiles } = await supabase
-          .from('profiles')
-          .select('*');
+        const dbProfiles = await api.getProfiles();
 
         const mapped = (dbProfiles || []).map(p => {
           const wantsList = Array.isArray(p.learning_skills) ? p.learning_skills : [];

@@ -15,23 +15,22 @@ export default function SkillMatch() {
     const fetchUsers = async () => {
       try {
         const me = await api.getMe();
-        const { data: myProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', me._id)
-          .single();
-        
-        setCurrentUser(myProfile);
+        setCurrentUser({
+          id: me._id,
+          full_name: me.name,
+          location: me.location,
+          primary_skill: me.primary_skill,
+          learning_skills: me.learning_skills,
+          skill_level: me.skill_level,
+          bio: me.bio,
+        });
 
         // Fetch another user
-        const { data: dbMatched } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', me._id)
-          .limit(1);
+        const allProfiles = await api.getProfiles();
+        const otherUser = (allProfiles || []).find((p: any) => p.id !== me._id);
         
-        if (dbMatched && dbMatched.length > 0) {
-          setMatchedUser(dbMatched[0]);
+        if (otherUser) {
+          setMatchedUser(otherUser);
         }
       } catch (err) {
         console.error(err);

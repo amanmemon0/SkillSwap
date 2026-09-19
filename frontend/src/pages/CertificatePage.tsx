@@ -13,7 +13,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { EmptyState } from '../components/ui/EmptyState';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
-import { useLearningStore, CURRENT_USER_ID } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -30,8 +30,8 @@ export default function CertificatePage() {
   const store = useLearningStore();
   const { toasts, show, dismiss } = useToast();
 
-  const myCertificates = store.getMyCertificates(CURRENT_USER_ID);
-  const myRequests = store.getCertificateRequests({ learnerId: CURRENT_USER_ID });
+  const myCertificates = store.getMyCertificates();
+  const myRequests = store.getCertificateRequests({ learnerId: store.currentUserId });
 
   return (
     <main className="min-h-screen bg-surface">

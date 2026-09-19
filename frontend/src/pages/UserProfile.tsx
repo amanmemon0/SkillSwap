@@ -8,7 +8,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import Navbar from '../components/Navbar';
 import { SkillRequestPanel } from '../features/skill-management/SkillManagement';
 import { skillManagementApi } from '../features/skill-management/api';
-import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 type Profile = {
   id: string;
@@ -25,17 +25,6 @@ type Profile = {
   learning_mode: string;
 };
 
-// Static simulated history data to make the profile look rich and complete
-const mockTaughtHistory = [
-  { id: 't1', title: 'React State Management & Hooks', student: 'Noah Williams', date: 'June 2026', reviews: 5 },
-  { id: 't2', title: 'Web Development Basics (HTML/CSS)', student: 'Arjun Rao', date: 'May 2026', reviews: 4.8 },
-];
-
-const mockLearnedHistory = [
-  { id: 'l1', title: 'Conversational Spanish', instructor: 'Meera Iyer', status: 'Ongoing (4/6 sessions)', date: 'Starts this week' },
-  { id: 'l2', title: 'Figma Auto Layout & Components', instructor: 'Aisha Patel', status: 'Completed', date: 'July 2026' },
-];
-
 export default function UserProfile() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [editing, setEditing] = useState(false);
@@ -43,8 +32,13 @@ export default function UserProfile() {
   const [message, setMessage] = useState('');
   const nav = useNavigate();
   const store = useLearningStore();
-  const myTeachingCourses = store.getMyTeachingCourses(CURRENT_USER_ID);
-  const myLearning = store.getMyLearning(CURRENT_USER_ID);
+  const myTeachingCourses = store.getMyTeachingCourses();
+  const myLearning = store.getMyLearning();
+  const taughtHistory = myTeachingCourses.map(course => ({ id: course.id, title: course.skillName, student: `${course.enrolledCount} enrolled`, date: '', reviews: 0 }));
+  const learnedHistory = myLearning.map(enrollment => {
+    const course = store.courses.find(item => item.id === enrollment.courseId);
+    return { id: enrollment.id, title: course?.skillName || 'Course', instructor: course?.teacherName || 'Teacher', status: enrollment.examStatus, date: enrollment.enrolledAt };
+  });
 
   // Form states for editing
   const [fullName, setFullName] = useState('');
@@ -362,7 +356,7 @@ export default function UserProfile() {
                 </div>
               </div>
               <div className="space-y-3">
-                {mockTaughtHistory.map((course) => (
+                {taughtHistory.map((course) => (
                   <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-surface border border-ink/5 gap-3">
                     <div>
                       <h4 className="font-bold text-sm">{course.title}</h4>
@@ -387,14 +381,14 @@ export default function UserProfile() {
                 </div>
               </div>
               <div className="space-y-3">
-                {mockLearnedHistory.map((course) => (
+                {learnedHistory.map((course) => (
                   <div key={course.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-4 rounded-2xl bg-emerald-50/50 border border-emerald-100 gap-3">
                     <div>
                       <h4 className="font-bold text-sm">{course.title}</h4>
                       <p className="text-xs text-ink/55 mt-1">Instructor: <b>{course.instructor}</b> · {course.date}</p>
                     </div>
                     <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
-                      course.status === 'Completed' ? 'bg-emerald-100 text-emerald-800' : 'bg-violet/10 text-violet'
+                      course.status === 'passed' ? 'bg-emerald-100 text-emerald-800' : 'bg-violet/10 text-violet'
                     }`}>
                       {course.status}
                     </span>
@@ -544,7 +538,7 @@ export default function UserProfile() {
               {myLearning.length > 0 ? (
                 <div className="space-y-2">
                   {myLearning.map(enrollment => {
-                    const course = mockCourses.find(c => c.id === enrollment.courseId);
+                    const course = store.courses.find(c => c.id === enrollment.courseId);
                     if (!course) return null;
                     return (
                       <div

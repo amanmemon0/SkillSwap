@@ -203,6 +203,21 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
+const getPublicProfiles = async (req, res, next) => {
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, location, city, state, country, bio, primary_skill, skill_level, learning_skills, availability, learning_mode, rating, total_reviews, completed_swaps, status, role')
+      .is('deleted_at', null)
+      .neq('status', 'Banned');
+
+    if (error) return next(error);
+    return res.status(200).json(profiles || []);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getAllUsers = async (req, res, next) => {
   try {
     const { data: users, error: usersErr } = await supabase
@@ -313,7 +328,7 @@ const adminDeleteUser = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser };
+module.exports = { registerUser, loginUser, getMe, updateProfile, getPublicProfiles, getAllUsers, adminUpdateUser, adminDeleteUser };
 
 
 

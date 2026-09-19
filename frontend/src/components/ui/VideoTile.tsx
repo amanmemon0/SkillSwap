@@ -1,14 +1,15 @@
-/* ═══════════════════════════════════════════════════════════
-   VideoTile — Renders a single participant's video stream
-   Falls back to Avatar when camera is off
-   ═══════════════════════════════════════════════════════════ */
+import { useEffect, useRef } from 'react';
 import { DailyVideo, useParticipantProperty } from '@daily-co/daily-react';
 import { MicOff } from 'lucide-react';
 import { Avatar } from './Primitives';
 
 interface VideoTileProps {
   /** Daily session ID of the participant */
-  sessionId: string;
+  sessionId?: string;
+  /** Direct browser MediaStream if using local media */
+  localStream?: MediaStream | null;
+  /** Participant name */
+  userName?: string;
   /** Whether this is the local user */
   isLocal?: boolean;
   /** Whether this is the featured/large tile */
@@ -17,22 +18,41 @@ interface VideoTileProps {
   badge?: string;
   /** Screen share tile */
   isScreenShare?: boolean;
+  /** Whether local camera is on */
+  isCamOn?: boolean;
+  /** Whether local mic is on */
+  isMicOn?: boolean;
 }
 
 export function VideoTile({
-  sessionId,
+  sessionId = '',
+  localStream,
+  userName: propUserName,
   isLocal = false,
   isFeatured = false,
   badge,
   isScreenShare = false,
+  isCamOn = true,
+  isMicOn = true,
 }: VideoTileProps) {
-  const userName = useParticipantProperty(sessionId, 'user_name') as string | undefined;
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const dailyUserName = useParticipantProperty(sessionId, 'user_name') as string | undefined;
   const videoState = useParticipantProperty(sessionId, 'tracks.video.state') as string | undefined;
   const audioState = useParticipantProperty(sessionId, 'tracks.audio.state') as string | undefined;
 
-  const hasVideo = videoState === 'playable';
-  const hasAudio = audioState === 'playable';
-  const displayName = userName || 'Participant';
+  const displayName = propUserName || dailyUserName || (isLocal ? 'You' : 'Participant');
+  
+  const hasLocalVideo = Boolean(localStream && isCamOn && localStream.getVideoTracks().some(t => t.enabled));
+  const hasDailyVideo = Boolean(sessionId && videoState === 'playable');
+  const hasVideo = localStream !== undefined ? hasLocalVideo : hasDailyVideo;
+
+  const hasAudio = localStream !== undefined ? isMicOn : (audioState === 'playable');
+
+  useEffect(() => {
+    if (videoRef.current && localStream) {
+      videoRef.current.srcObject = localStream;
+    }
+  }, [localStream, hasVideo]);
 
   return (
     <div
@@ -42,13 +62,23 @@ export function VideoTile({
     >
       {/* Video stream */}
       {hasVideo ? (
-        <DailyVideo
-          sessionId={sessionId}
-          type={isScreenShare ? 'screenVideo' : 'video'}
-          mirror={isLocal && !isScreenShare}
-          className="h-full w-full object-cover"
-          style={{ transform: isLocal && !isScreenShare ? 'scaleX(-1)' : undefined }}
-        />
+        localStream ? (
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={isLocal}
+            className={`h-full w-full object-cover ${isLocal && !isScreenShare ? '-scale-x-100' : ''}`}
+          />
+        ) : (
+          <DailyVideo
+            sessionId={sessionId}
+            type={isScreenShare ? 'screenVideo' : 'video'}
+            mirror={isLocal && !isScreenShare}
+            className="h-full w-full object-cover"
+            style={{ transform: isLocal && !isScreenShare ? 'scaleX(-1)' : undefined }}
+          />
+        )
       ) : (
         /* Avatar fallback when camera is off */
         <div className="absolute inset-0 flex flex-col items-center justify-center">
