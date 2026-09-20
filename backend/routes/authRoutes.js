@@ -1,21 +1,22 @@
 const express = require('express');
-const { registerUser, loginUser, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser } = require('../controllers/authController');
+const { registerUser, loginUser, forgotPassword, getMe, updateProfile, getPublicProfiles, getAllUsers, adminUpdateUser, adminDeleteUser } = require('../controllers/authController');
 const { protect, isAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
-const { registerSchema, loginSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
+const { registerSchema, loginSchema, forgotPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
 
 const router = express.Router();
 
 router.post('/register', validate(registerSchema), registerUser);
 router.post('/login', validate(loginSchema), loginUser);
+router.post('/forgot-password', validate(forgotPasswordSchema), forgotPassword);
 router.get('/me', protect, getMe);
 router.put('/profile', protect, validate(profileUpdateSchema), updateProfile);
+router.get('/profiles', getPublicProfiles);
 
 // Admin routes
 router.get('/admin/users', protect, isAdmin, getAllUsers);
 router.put('/admin/users/:id', protect, isAdmin, validate(adminUserUpdateSchema), adminUpdateUser);
 router.delete('/admin/users/:id', protect, isAdmin, adminDeleteUser);
-
 module.exports = router;
 
 

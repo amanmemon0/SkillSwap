@@ -1,26 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Calendar, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Check, Calendar, Clock, Send, Coins, ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, ExchangeVis } from '../components/ui/Primitives';
 import { api } from '../utils/api';
-import { supabase } from '../auth/supabaseClient';
 
 export default function ExchangeRequest() {
   const location = useLocation();
-  const matchedUser = location.state?.matchedUser;
-
-  // Fallback matchedUser if no navigation state exists
-  const fallbackUser = {
-    id: '11111111-1111-1111-1111-111111111111', // Meera Iyer
-    full_name: 'Meera Iyer',
-    location: 'Chennai',
-    primary_skill: 'Spoken English',
-    learning_skills: ['Cooking']
-  };
-
-  const targetUser = matchedUser || fallbackUser;
+  const [targetUser, setTargetUser] = useState<any>(location.state?.matchedUser || null);
 
   const [message, setMessage] = useState(
     `Hi! I can help you learn and would love to exchange skills with you. Are you available this weekend?`
@@ -32,58 +20,102 @@ export default function ExchangeRequest() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [senderSkillId, setSenderSkillId] = useState<string>('');
   const [receiverSkillId, setReceiverSkillId] = useState<string>('');
+  const [mySkills, setMySkills] = useState<any[]>([]);
+  const [theirSkills, setTheirSkills] = useState<any[]>([]);
+  const [compatibility, setCompatibility] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
-    const loadSkills = async () => {
+    const loadSkillsAndUsers = async () => {
       try {
         const me = await api.getMe();
-        const { data: myProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', me._id)
-          .single();
+        const myProfile = {
+          id: me._id,
+          full_name: me.name,
+          location: me.location,
+          primary_skill: me.primary_skill,
+          learning_skills: me.learning_skills,
+          skill_level: me.skill_level,
+          bio: me.bio,
+          credits: me.credits ?? 50,
+        };
         setCurrentUser(myProfile);
 
-        const { data: dbSkills } = await supabase
-          .from('skills')
-          .select('id, name');
-
-        if (dbSkills) {
-          const mySkillName = myProfile?.primary_skill;
-          let mySkill = dbSkills.find(s => s.name.toLowerCase() === mySkillName?.toLowerCase() || s.name.toLowerCase().includes(mySkillName?.toLowerCase()));
-          if (!mySkill && dbSkills.length > 0) {
-            mySkill = dbSkills[0];
-          }
-          if (mySkill) setSenderSkillId(mySkill.id);
-
-          const theirSkillName = targetUser.primary_skill;
-          let theirSkill = dbSkills.find(s => s.name.toLowerCase() === theirSkillName?.toLowerCase() || s.name.toLowerCase().includes(theirSkillName?.toLowerCase()));
-          if (!theirSkill && dbSkills.length > 0) {
-            theirSkill = dbSkills[Math.min(1, dbSkills.length - 1)];
-          }
-          if (theirSkill) setReceiverSkillId(theirSkill.id);
+        let partner = location.state?.matchedUser;
+        if (!partner) {
+          const allProfiles = await api.getProfiles();
+          partner = (allProfiles || []).find((p: any) => p.id !== me._id);
         }
+        setTargetUser(partner);
+
+        // Fetch skills from DB
+        const dbSkills = await api.getSkills();
+
+        // My offered skills
+        let senderSkills: any[] = [];
+        if (dbSkills && dbSkills.length > 0) {
+          const mySkillName = (myProfile?.primary_skill || '').toLowerCase();
+          // Try to find my primary skill in the DB
+          const matchedMySkill = dbSkills.find((s: any) =>
+            s.name.toLowerCase() === mySkillName ||
+            s.name.toLowerCase().includes(mySkillName) ||
+            (mySkillName && mySkillName.includes(s.name.toLowerCase()))
+          );
+          senderSkills = matchedMySkill ? [matchedMySkill, ...dbSkills.filter((s: any) => s.id !== matchedMySkill.id)] : dbSkills;
+          setMySkills(senderSkills);
+          setSenderSkillId(senderSkills[0]?.id || '');
+        }
+
+        // Their offered skills
+        if (partner && dbSkills && dbSkills.length > 0) {
+          const theirSkillName = (partner?.primary_skill || partner?.skillOffered || '').toLowerCase();
+          const matchedTheirSkill = dbSkills.find((s: any) =>
+            s.name.toLowerCase() === theirSkillName ||
+            s.name.toLowerCase().includes(theirSkillName) ||
+            (theirSkillName && theirSkillName.includes(s.name.toLowerCase()))
+          );
+          const theirList = matchedTheirSkill
+            ? [matchedTheirSkill, ...dbSkills.filter((s: any) => s.id !== matchedTheirSkill.id)]
+            : dbSkills;
+          setTheirSkills(theirList);
+          setReceiverSkillId(theirList[0]?.id || '');
+        }
+
+        // Fetch real compatibility score
+        if (partner?.id) {
+          try {
+            const compat = await api.getCompatibility(partner.id);
+            setCompatibility(compat);
+          } catch {
+            // non-critical, skip
+          }
+        }
+
         setLoading(false);
       } catch (err) {
         console.error('Error loading skills/profile:', err);
         setLoading(false);
       }
     };
-    loadSkills();
-  }, [targetUser.primary_skill]);
+    loadSkillsAndUsers();
+  }, [location.state?.matchedUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const partnerId = targetUser?.id || targetUser?._id;
+    if (!partnerId) {
+      setErrorMsg('No recipient selected for exchange.');
+      return;
+    }
     if (!senderSkillId || !receiverSkillId) {
-      setErrorMsg('Unable to determine skill IDs. Make sure both users have valid skills.');
+      setErrorMsg('Please select skills for both sides of the exchange.');
       return;
     }
     setErrorMsg('');
     try {
       await api.createExchange({
-        receiverId: targetUser.id,
+        receiverId: partnerId,
         senderSkillId,
         receiverSkillId,
         message: `${message} [Mode: ${mode}]` + (date ? ` on ${date}` : '') + (time ? ` at ${time}` : '')
@@ -110,7 +142,7 @@ export default function ExchangeRequest() {
             </div>
             <h2 className="mt-6 font-display text-3xl font-bold">Request Sent! 🎉</h2>
             <p className="mt-3 text-ink/55">
-              Your skill swap request has been sent to {targetUser.full_name}. You'll be notified when they respond.
+              Your skill swap request has been sent to {targetUser?.full_name || targetUser?.name || 'Partner'}. You'll be notified when they respond.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
               <Link to="/dashboard">
@@ -130,13 +162,31 @@ export default function ExchangeRequest() {
     );
   }
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-surface text-ink">
+        <Navbar />
+        <div className="flex justify-center py-32">
+          <div className="h-8 w-8 animate-spin rounded-full border-2 border-violet border-t-transparent" />
+        </div>
+      </main>
+    );
+  }
+
+  const partnerName = targetUser?.full_name || targetUser?.name || 'Partner';
+  const partnerLocation = targetUser?.location || 'Nearby';
+  const compatScore = compatibility?.compatibility ?? null;
+
+  const senderSkillName = mySkills.find(s => s.id === senderSkillId)?.name || 'Your Skill';
+  const receiverSkillName = theirSkills.find(s => s.id === receiverSkillId)?.name || 'Their Skill';
+
   return (
     <main className="min-h-screen bg-surface text-ink">
       <Navbar />
 
       <section className="section-container py-10">
-        <Link to="/match" className="inline-flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition mb-6">
-          <ArrowLeft size={16} /> Back to match
+        <Link to="/explore" className="inline-flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition mb-6">
+          <ArrowLeft size={16} /> Back to explore
         </Link>
 
         <div className="mx-auto max-w-2xl">
@@ -160,21 +210,45 @@ export default function ExchangeRequest() {
           >
             <div className="flex items-center justify-between mb-5">
               <div className="flex items-center gap-3">
-                <Avatar name={targetUser.full_name} size="lg" showStatus status="online" />
+                <Avatar name={partnerName} size="lg" showStatus status="online" />
                 <div>
-                  <h3 className="font-bold">{targetUser.full_name}</h3>
-                  <p className="text-xs text-ink/50">{targetUser.location} · 🟢 Online</p>
+                  <h3 className="font-bold">{partnerName}</h3>
+                  <p className="text-xs text-ink/50">{partnerLocation} · 🟢 Online</p>
                 </div>
               </div>
-              <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
-                92% Match
-              </span>
+              {compatScore !== null ? (
+                <span className={`rounded-full px-3 py-1 text-[10px] font-bold text-white ${
+                  compatScore >= 80 ? 'bg-gradient-to-r from-emerald-500 to-green-400' :
+                  compatScore >= 60 ? 'bg-gradient-to-r from-violet to-electric' :
+                  'bg-gradient-to-r from-amber-500 to-orange-400'
+                }`}>
+                  {compatScore}% Match
+                </span>
+              ) : (
+                <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
+                  Calculating...
+                </span>
+              )}
             </div>
 
-            <ExchangeVis 
-              yourSkill={currentUser?.primary_skill || 'Your Skill'} 
-              theirSkill={targetUser.primary_skill} 
+            <ExchangeVis
+              yourSkill={senderSkillName}
+              theirSkill={receiverSkillName}
             />
+          </motion.div>
+
+          {/* Credit cost notice */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mt-4 rounded-2xl bg-amber-50 border border-amber-100 p-4 flex items-center gap-3"
+          >
+            <Coins size={18} className="text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-800">Credit Cost: 10 credits each</p>
+              <p className="text-xs text-amber-600">When your partner accepts, 10 credits will be deducted from both accounts. You have <strong>{currentUser?.credits ?? 50}</strong> credits.</p>
+            </div>
           </motion.div>
 
           {/* Request Form */}
@@ -190,6 +264,44 @@ export default function ExchangeRequest() {
                 {errorMsg}
               </div>
             )}
+
+            {/* Skill Selectors */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-bold block mb-2">
+                  Your Skill to Offer
+                </label>
+                <div className="relative">
+                  <select
+                    value={senderSkillId}
+                    onChange={(e) => setSenderSkillId(e.target.value)}
+                    className="field appearance-none pr-8"
+                  >
+                    {mySkills.map((skill) => (
+                      <option key={skill.id} value={skill.id}>{skill.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-bold block mb-2">
+                  Their Skill You Want
+                </label>
+                <div className="relative">
+                  <select
+                    value={receiverSkillId}
+                    onChange={(e) => setReceiverSkillId(e.target.value)}
+                    className="field appearance-none pr-8"
+                  >
+                    {theirSkills.map((skill) => (
+                      <option key={skill.id} value={skill.id}>{skill.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 pointer-events-none" />
+                </div>
+              </div>
+            </div>
 
             {/* Message */}
             <div>

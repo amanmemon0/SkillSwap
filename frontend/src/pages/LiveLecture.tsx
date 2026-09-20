@@ -15,7 +15,7 @@ import { VideoTile } from '../components/ui/VideoTile';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import { useDailyCall } from '../hooks/useDailyCall';
-import { useLearningStore, mockCourses, mockChatMessages, CURRENT_USER_ID, CURRENT_USER_NAME } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 import type { ChatMessage } from '../data/skillswapTypes';
 
 /* ─── Helpers ─── */
@@ -61,6 +61,7 @@ function LiveLectureInner() {
     callState, error: callError,
     isMicOn, isCamOn, isScreenSharing,
     localSessionId, participantIds,
+    localMediaStream,
     join, leave,
     toggleMic, toggleCam, toggleScreenShare,
   } = useDailyCall();
@@ -71,15 +72,17 @@ function LiveLectureInner() {
   const [showLeave, setShowLeave] = useState(false);
   const [showComplete, setShowComplete] = useState(false);
   const [elapsed, setElapsed] = useState(0);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(mockChatMessages);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   /* ─── Course / lecture data ─── */
-  const course = mockCourses.find(c => c.id === courseId);
+  const currentUserId = store.currentUserId;
+  const currentUserName = store.currentUserName || 'User';
+  const course = store.courses.find(c => c.id === courseId);
   const lectures = course ? store.getCourseLectures(course.id) : [];
   const lecture = lectures.find(l => l.id === lectureId);
-  const isTeacher = course?.teacherId === CURRENT_USER_ID;
+  const isTeacher = course?.teacherId === currentUserId;
   const enrollments = course ? store.getCourseEnrollments(course.id) : [];
 
   /* ─── Timer (only runs when joined) ─── */
@@ -94,7 +97,15 @@ function LiveLectureInner() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  /* ─── 404 guard ─── */
+  /* ─── Loading / 404 guard ─── */
+  if (store.loading) {
+    return (
+      <main className="min-h-screen bg-ink flex items-center justify-center">
+        <p className="text-white/70">Loading lecture details...</p>
+      </main>
+    );
+  }
+
   if (!course || !lecture || !courseId || !lectureId) {
     return (
       <main className="min-h-screen bg-ink flex items-center justify-center">
@@ -107,7 +118,7 @@ function LiveLectureInner() {
 
   /* ─── Handlers ─── */
   const handleJoin = async () => {
-    await join(roomUrl, CURRENT_USER_NAME);
+    await join(roomUrl, currentUserName);
     show('Connected to lecture!', 'success');
   };
 
@@ -115,8 +126,8 @@ function LiveLectureInner() {
     if (!chatInput.trim()) return;
     const msg: ChatMessage = {
       id: `msg-${Date.now()}`,
-      senderName: CURRENT_USER_NAME,
-      senderId: CURRENT_USER_ID,
+      senderName: currentUserName,
+      senderId: currentUserId,
       text: chatInput.trim(),
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
@@ -131,7 +142,7 @@ function LiveLectureInner() {
       });
       show('Lecture marked as completed for all learners!', 'success');
     } else {
-      store.completeLecture(course.id, lecture.id, CURRENT_USER_ID);
+      store.completeLecture(course.id, lecture.id, currentUserId);
       show('Attendance marked!', 'success');
     }
     setShowComplete(false);
@@ -173,8 +184,8 @@ function LiveLectureInner() {
 
           {/* Camera preview placeholder */}
           <div className="mt-6 mx-auto h-48 w-full max-w-xs rounded-2xl border border-white/10 bg-gradient-to-br from-ink to-violet/20 flex flex-col items-center justify-center overflow-hidden">
-            <Avatar name={CURRENT_USER_NAME} size="xl" />
-            <p className="mt-3 text-sm font-bold text-white">{CURRENT_USER_NAME}</p>
+            <Avatar name={currentUserName} size="xl" />
+            <p className="mt-3 text-sm font-bold text-white">{currentUserName}</p>
             <p className="text-xs text-white/40">{isTeacher ? 'Tutor' : 'Learner'}</p>
           </div>
 
@@ -262,14 +273,16 @@ function LiveLectureInner() {
         <div className="flex-1 flex flex-col p-4 gap-4">
           {/* Featured video (local user or first remote) */}
           <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10">
-            {localSessionId && (
-              <VideoTile
-                sessionId={localSessionId}
-                isLocal
-                isFeatured
-                badge={isTeacher ? '🎓 Tutor' : undefined}
-              />
-            )}
+            <VideoTile
+              sessionId={localSessionId || ''}
+              localStream={localMediaStream}
+              userName={store.currentUserName}
+              isLocal
+              isFeatured
+              isCamOn={isCamOn}
+              isMicOn={isMicOn}
+              badge={isTeacher ? '🎓 Tutor' : undefined}
+            />
             {isScreenSharing && (
               <div className="absolute top-4 right-4 rounded-full bg-emerald-500/80 backdrop-blur px-3 py-1 text-xs font-bold">
                 🖥 Screen Sharing
@@ -342,10 +355,10 @@ function LiveLectureInner() {
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="flex-1 overflow-y-auto p-3 space-y-3">
                     {chatMessages.map(msg => (
-                      <div key={msg.id} className={`${msg.senderId === CURRENT_USER_ID ? 'text-right' : ''}`}>
+                      <div key={msg.id} className={`${msg.senderId === currentUserId ? 'text-right' : ''}`}>
                         <p className="text-[10px] font-bold text-white/40">{msg.senderName} · {msg.timestamp}</p>
                         <p className={`mt-0.5 inline-block rounded-xl px-3 py-2 text-sm ${
-                          msg.senderId === CURRENT_USER_ID
+                          msg.senderId === currentUserId
                             ? 'bg-violet text-white'
                             : 'bg-white/10 text-white/80'
                         }`}>

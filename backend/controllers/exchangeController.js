@@ -42,6 +42,14 @@ const createExchange = async (req, res, next) => {
       return res.status(404).json({ message: 'Receiver skill not found' });
     }
 
+    // Fetch sender profile name for notification
+    const { data: senderProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .eq('id', senderId)
+      .maybeSingle();
+    const senderName = senderProfile?.full_name || 'Someone';
+
     // Fetch receiver email
     const senderEmail = req.user.email;
     const { data: receiverUser } = await supabase
@@ -74,6 +82,15 @@ const createExchange = async (req, res, next) => {
     if (exchangeErr || !exchange) {
       return res.status(400).json({ message: exchangeErr?.message || 'Unable to create exchange request' });
     }
+
+    // Create notification for receiver
+    await supabase.from('notifications').insert([{
+      profile_id: receiverId,
+      type: 'exchange_request',
+      title: 'New Skill Swap Request',
+      detail: `${senderName} wants to swap ${senderSkill.name} ↔ ${receiverSkill.name} with you!`,
+      read: false,
+    }]);
 
     return res.status(201).json(exchange);
   } catch (error) {
@@ -149,6 +166,35 @@ const updateExchangeStatus = async (req, res, next) => {
       if (exchange.status !== 'pending') {
         return res.status(400).json({ message: `Cannot accept exchange with current status: ${exchange.status}` });
       }
+
+      // Check and deduct 10 credits from both users on accept
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, credits, full_name')
+        .in('id', [exchange.sender_id, exchange.receiver_id]);
+
+      const senderProfile = profiles?.find(p => p.id === exchange.sender_id);
+      const receiverProfile = profiles?.find(p => p.id === exchange.receiver_id);
+
+      if ((senderProfile?.credits ?? 0) < 10) {
+        return res.status(402).json({ message: 'The sender does not have enough credits to complete this exchange (need 10).' });
+      }
+      if ((receiverProfile?.credits ?? 0) < 10) {
+        return res.status(402).json({ message: 'You do not have enough credits to accept this exchange (need 10).' });
+      }
+
+      // Deduct credits from both
+      await supabase.from('profiles').update({ credits: (senderProfile.credits - 10) }).eq('id', exchange.sender_id);
+      await supabase.from('profiles').update({ credits: (receiverProfile.credits - 10) }).eq('id', exchange.receiver_id);
+
+      // Notify the sender that their request was accepted
+      await supabase.from('notifications').insert([{
+        profile_id: exchange.sender_id,
+        type: 'exchange_accepted',
+        title: 'Exchange Request Accepted! 🎉',
+        detail: `${receiverProfile?.full_name || 'Your partner'} accepted your skill swap request! 10 credits deducted from both accounts.`,
+        read: false,
+      }]);
     }
 
     if (status === 'receiver_declined') {
@@ -173,6 +219,25 @@ const updateExchangeStatus = async (req, res, next) => {
       if (exchange.status !== 'matched') {
         return res.status(400).json({ message: 'Only active exchanges (status: matched) can be marked as completed' });
       }
+      // Increment completed_swaps for both users
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, completed_swaps')
+        .in('id', [exchange.sender_id, exchange.receiver_id]);
+
+      for (const p of (profiles || [])) {
+        await supabase.from('profiles').update({ completed_swaps: (p.completed_swaps || 0) + 1 }).eq('id', p.id);
+      }
+
+      // Notify both users
+      const notifData = [exchange.sender_id, exchange.receiver_id].map(pid => ({
+        profile_id: pid,
+        type: 'exchange_completed',
+        title: 'Skill Exchange Completed! ✅',
+        detail: `Your exchange of ${exchange.sender_skill_name} ↔ ${exchange.receiver_skill_name} is complete. Leave a review!`,
+        read: false,
+      }));
+      await supabase.from('notifications').insert(notifData);
     }
 
     // Update status

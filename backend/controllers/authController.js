@@ -24,6 +24,9 @@ const serializeUser = (user, profile, token) => ({
   learning_skills: profile.learning_skills || [],
   availability: profile.availability || [],
   learning_mode: profile.learning_mode || 'Both',
+  credits: profile.credits ?? 50,
+  rating: profile.rating ?? null,
+  completed_swaps: profile.completed_swaps ?? 0,
   ...(token ? { token } : {}),
 });
 
@@ -47,6 +50,7 @@ const registerUser = async (req, res, next) => {
       availability,
       learning_mode: learningMode,
       role: 'user',
+      credits: 50,
     };
 
     // Check if username already exists
@@ -203,6 +207,21 @@ const updateProfile = async (req, res, next) => {
   }
 };
 
+const getPublicProfiles = async (req, res, next) => {
+  try {
+    const { data: profiles, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, username, location, city, state, country, bio, primary_skill, skill_level, learning_skills, availability, learning_mode, rating, total_reviews, completed_swaps, status, role')
+      .is('deleted_at', null)
+      .neq('status', 'Banned');
+
+    if (error) return next(error);
+    return res.status(200).json(profiles || []);
+  } catch (error) {
+    return next(error);
+  }
+};
+
 const getAllUsers = async (req, res, next) => {
   try {
     const { data: users, error: usersErr } = await supabase
@@ -313,7 +332,51 @@ const adminDeleteUser = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe, updateProfile, getAllUsers, adminUpdateUser, adminDeleteUser };
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email.toLowerCase())
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (userError) return next(userError);
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password_hash: passwordHash })
+      .eq('id', user.id);
+
+    if (updateError) return next(updateError);
+
+    return res.status(200).json({
+      message: 'Password reset successfully. You can now sign in with your new password.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+  forgotPassword,
+  getMe,
+  updateProfile,
+  getPublicProfiles,
+  getAllUsers,
+  adminUpdateUser,
+  adminDeleteUser,
+};
 
 
 

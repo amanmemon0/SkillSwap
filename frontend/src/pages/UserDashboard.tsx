@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpen,
   Compass,
+  Coins,
   Gift,
   GraduationCap,
   Home,
@@ -26,7 +27,7 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import LiveFeed from '../components/LiveFeed';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 import { supabase } from '../auth/supabaseClient';
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
@@ -49,7 +50,8 @@ export default function UserDashboard() {
     skillsOffered: 0,
     skillsWanted: 0,
     activeExchanges: 0,
-    completedSwaps: 0
+    completedSwaps: 0,
+    credits: 50,
   });
 
   const store = useLearningStore();
@@ -75,18 +77,14 @@ export default function UserDashboard() {
 
   useEffect(() => {
     if (!userId) return;
-    const fetchExchanges = async () => {
+    const fetchExchangesAndMetrics = async () => {
       try {
-        const { data: dbExchanges } = await supabase
-          .from('exchanges')
-          .select(`
-            *,
-            sender:sender_id (full_name),
-            receiver:receiver_id (full_name)
-          `)
-          .or(`sender_id.eq.${userId},receiver_id.eq.${userId}`);
+        const [data, user] = await Promise.all([
+          api.getExchanges(),
+          api.getMe(),
+        ]);
         
-        const mapped = (dbExchanges || []).map(ex => {
+        const mapped = (data || []).map((ex: any) => {
           const isSender = ex.sender_id === userId;
           const partnerName = isSender ? ex.receiver?.full_name : ex.sender?.full_name;
           return {
@@ -99,6 +97,19 @@ export default function UserDashboard() {
           };
         });
         setExchanges(mapped.slice(0, 2));
+
+        const activeCount = (data || []).filter((e: any) => e.status === 'matched' || e.status === 'pending').length;
+        const completedCount = (data || []).filter((e: any) => e.status === 'completed').length;
+        const offerCount = user?.primary_skill ? 1 : 0;
+        const learnCount = Array.isArray(user?.learning_skills) ? user.learning_skills.length : 0;
+
+        setProfileMetrics({
+          skillsOffered: offerCount,
+          skillsWanted: learnCount,
+          activeExchanges: activeCount,
+          completedSwaps: completedCount,
+          credits: user?.credits ?? 50,
+        });
       } catch (err) {
         console.error(err);
       }
@@ -106,60 +117,37 @@ export default function UserDashboard() {
 
     const fetchMatches = async () => {
       try {
-        const { data: dbProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', userId)
-          .limit(3);
+        const allProfiles = await api.getProfiles();
+        const dbProfiles = (allProfiles || []).filter((p: any) => p.id !== userId).slice(0, 5);
         
-        const mapped = (dbProfiles || []).map(p => ({
-          name: p.full_name || 'Neighbour',
-          skill: p.primary_skill || 'Various Skills',
-          distance: '1.2 km away',
-          category: p.primary_skill ? 'Creative' : 'General',
-          online: true,
-          match: p.rating ? Math.round(Number(p.rating) * 20) : 85
-        }));
-        setNearbyUsers(mapped);
-      } catch (err) {
-        console.error(err);
-      }
-    };
+        // Fetch real compatibility scores in parallel
+        const compatResults = await Promise.allSettled(
+          dbProfiles.map((p: any) => api.getCompatibility(p.id))
+        );
 
-    const fetchMetrics = async () => {
-      try {
-        const { count: offerCount } = await supabase
-          .from('member_skills')
-          .select('*', { count: 'exact', head: true })
-          .eq('profile_id', userId)
-          .eq('type', 'offer');
-
-        const { count: learnCount } = await supabase
-          .from('member_skills')
-          .select('*', { count: 'exact', head: true })
-          .eq('profile_id', userId)
-          .eq('type', 'learn');
-
-        const { data: prof } = await supabase
-          .from('profiles')
-          .select('completed_swaps, pending_swaps')
-          .eq('id', userId)
-          .single();
-
-        setProfileMetrics({
-          skillsOffered: (offerCount || 0) + 1,
-          skillsWanted: learnCount || 0,
-          activeExchanges: prof?.pending_swaps || 0,
-          completedSwaps: prof?.completed_swaps || 0
+        const mapped = dbProfiles.map((p: any, i: number) => {
+          const compat = compatResults[i].status === 'fulfilled' ? (compatResults[i] as PromiseFulfilledResult<any>).value : null;
+          return {
+            id: p.id,
+            name: p.full_name || 'Member',
+            skill: p.primary_skill || 'Various Skills',
+            distance: '1.2 km away',
+            category: p.primary_skill ? 'Creative' : 'General',
+            online: true,
+            match: compat?.compatibility ?? (p.rating ? Math.round(Number(p.rating) * 20) : 75),
+            _raw: p,
+          };
         });
+        // Sort by match score descending
+        mapped.sort((a, b) => b.match - a.match);
+        setNearbyUsers(mapped.slice(0, 3));
       } catch (err) {
         console.error(err);
       }
     };
 
-    fetchExchanges();
+    fetchExchangesAndMetrics();
     fetchMatches();
-    fetchMetrics();
   }, [userId]);
 
   const displayName = profile?.full_name || 'Member';
@@ -255,9 +243,9 @@ export default function UserDashboard() {
                 accent
               />
               <StatCard
-                label="Completed"
-                value={profileMetrics.completedSwaps}
-                icon={<Gift size={18} className="text-emerald-500" />}
+                label="Credits"
+                value={profileMetrics.credits}
+                icon={<Coins size={18} className="text-amber-500" />}
               />
             </div>
 
@@ -364,7 +352,7 @@ export default function UserDashboard() {
                   <div className="space-y-3">
                     {nearbyUsers.map((person) => (
                       <div
-                        key={person.name}
+                        key={person.id || person.name}
                         className="flex items-center gap-3 rounded-2xl bg-surface p-3 transition hover:bg-violet/5"
                       >
                         <Avatar name={person.name} showStatus status={person.online ? 'online' : 'offline'} />
@@ -375,7 +363,14 @@ export default function UserDashboard() {
                             <MapPin size={10} /> {person.distance}
                           </p>
                         </div>
-                        <MatchScore score={person.match} size={44} />
+                        <div className="flex flex-col items-end gap-1.5">
+                          <MatchScore score={person.match} size={44} />
+                          {person.id && (
+                            <a href={`/users/${person.id}`} className="text-[10px] font-bold text-violet hover:underline">
+                              View →
+                            </a>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -398,7 +393,7 @@ export default function UserDashboard() {
               {myLearning.length > 0 ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   {myLearning.map(enrollment => {
-                    const course = mockCourses.find(c => c.id === enrollment.courseId);
+                    const course = store.courses.find(c => c.id === enrollment.courseId);
                     if (!course) return null;
                     return (
                       <div

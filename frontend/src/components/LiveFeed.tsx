@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LiveBadge } from './ui/Primitives';
 import { supabase } from '../auth/supabaseClient';
+import { api } from '../utils/api';
 
 const typeIcons: Record<string, string> = {
   offer: '🟢',
@@ -28,11 +29,8 @@ export default function LiveFeed({ compact = false }: { compact?: boolean }) {
           .order('created_at', { ascending: false })
           .limit(5);
 
-        const { data: dbProfiles } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('id', { ascending: false })
-          .limit(5);
+        const allProfiles = await api.getProfiles();
+        const dbProfiles = (allProfiles || []).slice(0, 5);
 
         const items: any[] = [];
 

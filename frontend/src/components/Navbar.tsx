@@ -5,11 +5,7 @@ import { api } from '../utils/api';
 import { Avatar, Button } from './ui/Primitives';
 import NotificationBell from './NotificationBell';
 
-const initialNotifications = [
-  { id: 1, title: 'Meera accepted your exchange request', detail: 'Spanish conversation practice starts this week.', time: '12 min ago', read: false },
-  { id: 2, title: 'Your profile is getting noticed', detail: 'Three members viewed your design-systems skill.', time: '2 hours ago', read: false },
-  { id: 3, title: 'A new skill match is available', detail: 'Rohan can help you explore street photography.', time: 'Yesterday', read: true },
-];
+
 
 type NavLinkItem = { to: string; label: string; isHash?: boolean };
 
@@ -59,16 +55,16 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
         const notifs = await api.getNotifications();
         setNotifications(notifs.map(n => ({
           id: n.id,
-          title: n.title,
-          detail: n.detail,
+          title: n.title || 'Notification',
+          detail: n.detail || n.message || '',
           time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           read: n.read
         })));
 
         // Subscribe to live realtime notifications
         const { supabase } = await import('../auth/supabaseClient');
-        channel = supabase
-          .channel(`notifications:profile:${user._id}`)
+        channel = supabase.channel(`notifications:profile:${user._id}`);
+        channel
           .on(
             'postgres_changes',
             {
@@ -77,12 +73,12 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
               table: 'notifications',
               filter: `profile_id=eq.${user._id}`
             },
-            (payload) => {
+            (payload: any) => {
               if (payload.eventType === 'INSERT') {
                 const newNotif = {
                   id: payload.new.id,
-                  title: payload.new.title,
-                  detail: payload.new.detail,
+                  title: payload.new.title || 'Notification',
+                  detail: payload.new.detail || '',
                   time: 'Just now',
                   read: payload.new.read
                 };

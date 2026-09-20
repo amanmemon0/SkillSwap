@@ -24,6 +24,7 @@ export interface DailyCallControls {
   isScreenSharing: boolean;
   localSessionId: string | null;
   participantIds: string[];
+  localMediaStream: MediaStream | null;
   /* Actions */
   join: (roomUrl: string, userName: string) => Promise<void>;
   leave: () => Promise<void>;
@@ -46,20 +47,46 @@ export function useDailyCall(): DailyCallControls {
   const [error, setError] = useState<string | null>(null);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isCamOn, setIsCamOn] = useState(true);
+  const [localMediaStream, setLocalMediaStream] = useState<MediaStream | null>(null);
 
-  /* ─── Join a Daily room ─── */
+  /* ─── Join a Daily room or fallback to local media ─── */
   const join = useCallback(
     async (roomUrl: string, userName: string) => {
-      if (!daily) return;
+      setCallState('joining');
+      setError(null);
+
+      // Try Daily room if not default placeholder
+      if (daily && !roomUrl.includes('your-team.daily.co')) {
+        try {
+          await daily.join({ url: roomUrl, userName });
+          setCallState('joined');
+          return;
+        } catch (err: any) {
+          console.warn('[Daily] join failed, using local browser media stream', err);
+        }
+      }
+
+      // Local browser media stream fallback
       try {
-        setCallState('joining');
-        setError(null);
-        await daily.join({ url: roomUrl, userName });
+        let stream: MediaStream | null = null;
+        if (navigator?.mediaDevices?.getUserMedia) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          } catch {
+            try {
+              stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            } catch {
+              stream = await navigator.mediaDevices.getUserMedia({ audio: true }).catch(() => null);
+            }
+          }
+        }
+        setLocalMediaStream(stream);
         setCallState('joined');
+        setError(null);
       } catch (err: any) {
-        console.error('[Daily] join error', err);
-        setError(err?.message ?? 'Failed to join call');
-        setCallState('error');
+        console.warn('[MediaStream] camera/mic warning:', err);
+        setCallState('joined');
+        setError(null);
       }
     },
     [daily],
@@ -67,32 +94,45 @@ export function useDailyCall(): DailyCallControls {
 
   /* ─── Leave ─── */
   const leave = useCallback(async () => {
-    if (!daily) return;
     try {
       setCallState('leaving');
-      await daily.leave();
+      if (localMediaStream) {
+        localMediaStream.getTracks().forEach((t) => t.stop());
+        setLocalMediaStream(null);
+      }
+      if (daily) {
+        await daily.leave().catch(() => {});
+      }
       setCallState('idle');
     } catch (err: any) {
-      console.error('[Daily] leave error', err);
+      console.error('[Call] leave error', err);
       setCallState('idle');
     }
-  }, [daily]);
+  }, [daily, localMediaStream]);
 
   /* ─── Toggle Mic ─── */
   const toggleMic = useCallback(() => {
-    if (!daily) return;
     const next = !isMicOn;
-    daily.setLocalAudio(next);
     setIsMicOn(next);
-  }, [daily, isMicOn]);
+    if (daily) {
+      try { daily.setLocalAudio(next); } catch {}
+    }
+    if (localMediaStream) {
+      localMediaStream.getAudioTracks().forEach((t) => { t.enabled = next; });
+    }
+  }, [daily, isMicOn, localMediaStream]);
 
   /* ─── Toggle Camera ─── */
   const toggleCam = useCallback(() => {
-    if (!daily) return;
     const next = !isCamOn;
-    daily.setLocalVideo(next);
     setIsCamOn(next);
-  }, [daily, isCamOn]);
+    if (daily) {
+      try { daily.setLocalVideo(next); } catch {}
+    }
+    if (localMediaStream) {
+      localMediaStream.getVideoTracks().forEach((t) => { t.enabled = next; });
+    }
+  }, [daily, isCamOn, localMediaStream]);
 
   /* ─── Toggle Screen Share ─── */
   const toggleScreenShare = useCallback(() => {
@@ -117,20 +157,23 @@ export function useDailyCall(): DailyCallControls {
   /* ─── Handle fatal errors ─── */
   useDailyEvent('error', (evt) => {
     console.error('[Daily] error event', evt);
-    setError(evt?.error?.msg ?? evt?.errorMsg ?? 'An error occurred');
-    setCallState('error');
+    if (callState === 'joining') {
+      // Allow fallback rather than hard error
+      setError(null);
+    }
   });
 
   /* ─── Cleanup on unmount ─── */
   useEffect(() => {
     return () => {
+      if (localMediaStream) {
+        localMediaStream.getTracks().forEach((t) => t.stop());
+      }
       if (daily && callState === 'joined') {
         daily.leave().catch(() => {});
       }
     };
-    // Only run on unmount
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [daily, callState, localMediaStream]);
 
   return {
     callState,
@@ -140,6 +183,7 @@ export function useDailyCall(): DailyCallControls {
     isScreenSharing: isSharingScreen,
     localSessionId,
     participantIds,
+    localMediaStream,
     join,
     leave,
     toggleMic,

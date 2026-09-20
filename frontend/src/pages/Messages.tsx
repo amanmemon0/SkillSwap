@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRightLeft, Calendar, Send, Smile } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ArrowRightLeft, Calendar, MessageSquare, Send, Smile } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, SkillTag, StatusDot } from '../components/ui/Primitives';
-import { supabase } from '../auth/supabaseClient';
 import { api } from '../utils/api';
 
 type Message = {
@@ -30,95 +30,83 @@ export default function Messages() {
   const [inputText, setInputText] = useState('');
   const [showSidebar, setShowSidebar] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const activeChat = chats.find((c) => c.id === activeChatId) || chats[0];
 
   const fetchChats = async () => {
     try {
+      setLoading(true);
       const me = await api.getMe();
       setUserId(me._id);
 
-      // Query conversations
-      const { data: convs } = await supabase
-        .from('conversations')
-        .select('*')
-        .or(`participant_1_id.eq.${me._id},participant_2_id.eq.${me._id}`);
+      let convs = await api.getConversations();
 
-      const activeConvs = convs || [];
-
-      if (activeConvs.length === 0) {
-        const { data: meera } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', me._id)
-          .limit(1)
-          .single();
-
-        if (meera) {
-          const { data: newConv } = await supabase
-            .from('conversations')
-            .insert({
-              participant_1_id: me._id,
-              participant_2_id: meera.id
-            })
-            .select()
-            .single();
-          
-          if (newConv) {
-            await supabase.from('messages').insert({
-              conversation_id: newConv.id,
-              sender_id: meera.id,
-              content: "Hi! I saw you wanted to learn Spanish. I can help with that!"
-            });
-            activeConvs.push(newConv);
+      // If no conversation exists yet, auto-create one with an exchange partner or another member
+      if (!convs || convs.length === 0) {
+        try {
+          const exchanges = await api.getExchanges();
+          let partnerId = exchanges?.[0]?.receiver_id === me._id ? exchanges?.[0]?.sender_id : exchanges?.[0]?.receiver_id;
+          if (!partnerId) {
+            const profiles = await api.getProfiles();
+            const other = (profiles || []).find((p: any) => p.id !== me._id);
+            partnerId = other?.id;
           }
+          if (partnerId) {
+            const newConv = await api.createConversation(partnerId);
+            if (newConv) {
+              await api.sendMessage(newConv.id, "Hi! Excited to connect on SkillSwap!").catch(() => {});
+              convs = await api.getConversations();
+            }
+          }
+        } catch (e) {
+          console.error('Auto create conversation failed:', e);
         }
       }
 
       const chatsList: Chat[] = [];
 
-      for (const conv of activeConvs) {
-        const otherId = conv.participant_1_id === me._id ? conv.participant_2_id : conv.participant_1_id;
-        
-        const { data: otherProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', otherId)
-          .single();
+      for (const conv of convs || []) {
+        const isUser1 = conv.user1_id === me._id;
+        const otherUser = isUser1 ? conv.user2 : conv.user1;
+        const otherName = otherUser?.full_name || 'Member';
 
-        const { data: dbMsgs } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('conversation_id', conv.id)
-          .order('created_at', { ascending: true });
+        let dbMsgs: any[] = [];
+        try {
+          dbMsgs = await api.getMessages(conv.id);
+        } catch (e) {
+          console.error(`Failed to load messages for conv ${conv.id}:`, e);
+        }
 
-        const mappedMsgs: Message[] = (dbMsgs || []).map(m => ({
+        const mappedMsgs: Message[] = (dbMsgs || []).map((m: any) => ({
           id: m.id,
           sender: m.sender_id === me._id ? 'me' : 'them',
-          text: m.content,
+          text: m.body || '',
           timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }));
 
         chatsList.push({
           id: conv.id,
-          name: otherProfile?.full_name || 'Member',
-          avatar: otherProfile?.full_name ? otherProfile.full_name.charAt(0) : 'M',
+          name: otherName,
+          avatar: otherName.charAt(0).toUpperCase(),
           lastMessage: mappedMsgs[mappedMsgs.length - 1]?.text || 'No messages yet',
           time: 'Active',
           unread: false,
           online: true,
-          skill: otherProfile?.primary_skill || 'Collaboration',
+          skill: otherUser?.primary_skill || 'Collaboration',
           messages: mappedMsgs
         });
       }
 
       setChats(chatsList);
-      if (chatsList.length > 0 && !activeChatId) {
+      if (chatsList.length > 0 && (!activeChatId || !chatsList.some(c => c.id === activeChatId))) {
         setActiveChatId(chatsList[0].id);
       }
     } catch (err) {
-      console.error(err);
+      console.error('fetchChats error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -134,25 +122,52 @@ export default function Messages() {
     e.preventDefault();
     if (!inputText.trim() || !activeChatId || !userId) return;
 
+    const messageText = inputText.trim();
+    setInputText('');
     try {
-      await supabase.from('messages').insert({
-        conversation_id: activeChatId,
-        sender_id: userId,
-        content: inputText.trim()
-      });
-      setInputText('');
+      await api.sendMessage(activeChatId, messageText);
       await fetchChats();
     } catch (err) {
-      console.error(err);
+      console.error('Send message error:', err);
+      setInputText(messageText);
     }
   };
 
-  if (!activeChat) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-surface text-ink flex flex-col">
         <Navbar variant="auth" />
         <div className="flex-1 grid place-items-center">
           <p className="text-ink/50 text-sm font-bold animate-pulse">Loading conversations...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (chats.length === 0) {
+    return (
+      <main className="min-h-screen bg-surface text-ink flex flex-col">
+        <Navbar variant="auth" />
+        <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+          <div className="h-16 w-16 rounded-full bg-violet/10 grid place-items-center text-violet mb-4">
+            <MessageSquare size={32} />
+          </div>
+          <h2 className="text-2xl font-bold font-display">No Conversations Yet</h2>
+          <p className="text-sm text-ink/50 max-w-sm mt-2">
+            Propose a skill exchange or connect with a swapper to start messaging!
+          </p>
+          <div className="mt-6 flex gap-3">
+            <Link to="/explore">
+              <Button className="bg-gradient-to-r from-violet to-electric text-white">
+                Explore Skills
+              </Button>
+            </Link>
+            <Link to="/match">
+              <Button className="bg-white text-ink ring-1 ring-ink/10">
+                Find Matches
+              </Button>
+            </Link>
+          </div>
         </div>
       </main>
     );

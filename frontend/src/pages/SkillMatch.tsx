@@ -1,44 +1,54 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, ArrowRightLeft, MapPin, MessageCircle, Star, UserCheck } from 'lucide-react';
+import { ArrowRight, ArrowRightLeft, CheckCircle, MapPin, MessageCircle, Star, UserCheck } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, MatchScore, SkillTag } from '../components/ui/Primitives';
-import { supabase } from '../auth/supabaseClient';
 import { api } from '../utils/api';
 
 export default function SkillMatch() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [matchedUser, setMatchedUser] = useState<any>(null);
+  const [compatibility, setCompatibility] = useState<any>(null);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchUsers = async () => {
       try {
         const me = await api.getMe();
-        const { data: myProfile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', me._id)
-          .single();
-        
-        setCurrentUser(myProfile);
+        setCurrentUser({
+          id: me._id,
+          full_name: me.name,
+          location: me.location,
+          primary_skill: me.primary_skill,
+          learning_skills: me.learning_skills,
+          skill_level: me.skill_level,
+          bio: me.bio,
+        });
 
-        // Fetch another user
-        const { data: dbMatched } = await supabase
-          .from('profiles')
-          .select('*')
-          .neq('id', me._id)
-          .limit(1);
-        
-        if (dbMatched && dbMatched.length > 0) {
-          setMatchedUser(dbMatched[0]);
+        // Use location.state if navigated from a specific user, otherwise find a match
+        let partner = location.state?.matchedUser || null;
+        if (!partner) {
+          const allProfiles = await api.getProfiles();
+          partner = (allProfiles || []).find((p: any) => p.id !== me._id);
+        }
+        setMatchedUser(partner);
+
+        // Fetch real compatibility
+        if (partner?.id) {
+          try {
+            const compat = await api.getCompatibility(partner.id);
+            setCompatibility(compat);
+          } catch {
+            // non-critical
+          }
         }
       } catch (err) {
         console.error(err);
       }
     };
     fetchUsers();
-  }, []);
+  }, [location.state]);
 
   return (
     <main className="min-h-screen bg-surface text-ink">
@@ -73,9 +83,9 @@ export default function SkillMatch() {
           <div className="rounded-[2.5rem] bg-white p-8 sm:p-10 shadow-float border border-ink/5">
             {/* Match Score */}
             <div className="text-center mb-8">
-              <MatchScore score={matchedUser ? (matchedUser.rating ? Math.round(Number(matchedUser.rating) * 20) : 92) : 92} size={80} />
-              <p className="mt-3 font-display text-lg font-bold">{matchedUser ? (matchedUser.rating ? Math.round(Number(matchedUser.rating) * 20) : 92) : 92}% Match</p>
-              <p className="text-xs text-ink/50">Excellent compatibility</p>
+              <MatchScore score={compatibility?.compatibility ?? (matchedUser?.rating ? Math.round(Number(matchedUser.rating) * 20) : 92)} size={80} />
+              <p className="mt-3 font-display text-lg font-bold">{compatibility?.compatibility ?? (matchedUser?.rating ? Math.round(Number(matchedUser.rating) * 20) : 92)}% Match</p>
+              <p className="text-xs text-ink/50">{compatibility?.compatibility >= 80 ? 'Excellent' : compatibility?.compatibility >= 60 ? 'Good' : 'Fair'} compatibility</p>
             </div>
 
             {/* Two Profile Cards */}
@@ -171,18 +181,16 @@ export default function SkillMatch() {
             <div className="mt-8 rounded-2xl bg-emerald-50 p-5 border border-emerald-100">
               <h4 className="font-bold text-emerald-800 text-sm">Why this match works ✨</h4>
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <div className="flex items-center gap-2 text-xs text-emerald-700">
-                  <span className="h-5 w-5 rounded-full bg-emerald-200 grid place-items-center text-[10px]">✓</span>
-                  Skills perfectly complement
-                </div>
-                <div className="flex items-center gap-2 text-xs text-emerald-700">
-                  <span className="h-5 w-5 rounded-full bg-emerald-200 grid place-items-center text-[10px]">✓</span>
-                  Both available evenings
-                </div>
-                <div className="flex items-center gap-2 text-xs text-emerald-700">
-                  <span className="h-5 w-5 rounded-full bg-emerald-200 grid place-items-center text-[10px]">✓</span>
-                  Nearby location
-                </div>
+                {(compatibility?.reasons?.length ? compatibility.reasons : [
+                  'Skills perfectly complement',
+                  'Both available evenings',
+                  'Nearby location'
+                ]).map((reason: string, i: number) => (
+                  <div key={i} className="flex items-center gap-2 text-xs text-emerald-700">
+                    <span className="h-5 w-5 rounded-full bg-emerald-200 grid place-items-center text-[10px]">✓</span>
+                    {reason}
+                  </div>
+                ))}
               </div>
             </div>
 
@@ -193,9 +201,13 @@ export default function SkillMatch() {
                   <MessageCircle size={16} /> Propose Exchange
                 </Button>
               </Link>
-              <Button className="bg-white text-ink ring-1 ring-ink/10 hover:bg-violet/5 hover:text-violet">
-                View Full Profile <ArrowRight size={16} />
-              </Button>
+              {matchedUser?.id && (
+                <Link to={`/users/${matchedUser.id}`}>
+                  <Button className="bg-white text-ink ring-1 ring-ink/10 hover:bg-violet/5 hover:text-violet">
+                    View Full Profile <ArrowRight size={16} />
+                  </Button>
+                </Link>
+              )}
             </div>
           </div>
         </motion.div>

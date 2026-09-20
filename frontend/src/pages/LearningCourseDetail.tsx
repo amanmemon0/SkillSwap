@@ -5,7 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
   ArrowLeft, BookOpen, CheckCircle2, Circle, Clock, Lock,
-  FileText, Award, ChevronRight, Play, PartyPopper, Star, StarHalf, CalendarClock,
+  FileText, Award, ChevronRight, Play, PartyPopper, Star, StarHalf
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
@@ -14,7 +14,7 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID, CURRENT_USER_NAME } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 export default function LearningCourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -27,20 +27,22 @@ export default function LearningCourseDetail() {
   const [hoveredStar, setHoveredStar] = useState(0);
   const [selectedStar, setSelectedStar] = useState(0);
 
-  const course = mockCourses.find(c => c.id === courseId);
-  const enrollment = course ? store.getEnrollment(course.id, CURRENT_USER_ID) : null;
+  const course = store.courses.find(c => c.id === courseId);
+  const enrollment = course ? store.getEnrollment(course.id) : null;
   const lectures = course ? store.getCourseLectures(course.id) : [];
-  const certReqs = store.getCertificateRequests({ learnerId: CURRENT_USER_ID });
+  const certReqs = store.getCertificateRequests({ learnerId: store.currentUserId });
   const certReq = certReqs.find(r => r.courseId === courseId);
 
-  // Returns true if a scheduled datetime is joinable (within 15 min before or 2h after)
-  const isJoinableNow = (scheduledAt: string | null | undefined): boolean => {
-    if (!scheduledAt) return false;
-    const diff = new Date(scheduledAt).getTime() - Date.now();
-    return diff <= 15 * 60_000 && diff > -2 * 60 * 60_000;
-  };
-
-  const examScheduledAt = course ? store.getExamScheduledAt(course.id) : null;
+  if (store.loading) {
+    return (
+      <main className="min-h-screen bg-surface">
+        <Navbar variant="auth" />
+        <div className="flex items-center justify-center py-32">
+          <p className="text-ink/60 font-medium">Loading course details...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!course || !enrollment) {
     return (
@@ -60,13 +62,13 @@ export default function LearningCourseDetail() {
   const canRequestCert = examPassed && enrollment.certificateStatus === 'eligible';
 
   const handleRequestExam = () => {
-    store.requestExam(course.id, CURRENT_USER_ID, CURRENT_USER_NAME);
+    store.requestExam(course.id);
     setShowExamRequest(false);
     show('Exam request sent to your tutor!', 'success');
   };
 
   const handleRequestCert = () => {
-    store.requestCertificate(course.id, CURRENT_USER_ID, CURRENT_USER_NAME);
+    store.requestCertificate(course.id);
     setShowCertRequest(false);
     show('Certificate request sent!', 'success');
   };
@@ -189,18 +191,6 @@ export default function LearningCourseDetail() {
                       <span className="flex items-center gap-1"><Clock size={11} /> {lecture.duration}</span>
                       <StatusBadge status={isCompleted ? 'completed' : isCurrent ? 'in-progress' : 'upcoming'} />
                     </div>
-                    {/* Scheduled time badge */}
-                    {lecture.scheduledAt && !isCompleted && (
-                      <p className={`mt-1 flex items-center gap-1 text-[11px] font-bold ${
-                        isJoinableNow(lecture.scheduledAt) ? 'text-emerald-600' : 'text-violet/70'
-                      }`}>
-                        <CalendarClock size={11} />
-                        {isJoinableNow(lecture.scheduledAt)
-                          ? '🟢 Live Now'
-                          : new Date(lecture.scheduledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-                        }
-                      </p>
-                    )}
                   </div>
 
                   {/* Action */}
@@ -208,27 +198,12 @@ export default function LearningCourseDetail() {
                     <Button
                       onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
                       className={`text-xs py-1.5 ${
-                        isJoinableNow(lecture.scheduledAt)
-                          ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-glow animate-pulse'
-                          : isCurrent
-                            ? 'bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow'
-                            : 'bg-ink/5 text-ink/50 hover:bg-ink/10'
+                        isCurrent
+                          ? 'bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow'
+                          : 'bg-ink/5 text-ink/50 hover:bg-ink/10'
                       }`}
                     >
-                      {isJoinableNow(lecture.scheduledAt)
-                        ? <><Play size={12} /> Join Now</>
-                        : isCurrent ? <><Play size={12} /> Join Lecture</> : 'Review'
-                      }
-                    </Button>
-                  )}
-
-                  {/* Not started but has upcoming schedule — show join if live */}
-                  {isLocked && lecture.scheduledAt && isJoinableNow(lecture.scheduledAt) && (
-                    <Button
-                      onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
-                      className="text-xs py-1.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-glow animate-pulse"
-                    >
-                      <Play size={12} /> Join Now
+                      {isCurrent ? <><Play size={12} /> Join Lecture</> : 'Review'}
                     </Button>
                   )}
                 </motion.div>
@@ -292,24 +267,14 @@ export default function LearningCourseDetail() {
                   <FileText size={20} />
                   <div>
                     <p className="text-sm font-bold">Exam Scheduled</p>
-                    {examScheduledAt && (
-                      <p className="text-xs flex items-center gap-1 text-blue-600 font-bold mt-0.5">
-                        <CalendarClock size={11} />
-                        {new Date(examScheduledAt).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    )}
-                    <p className="text-xs text-ink/50 mt-0.5">Your exam is ready. Take it when you're prepared!</p>
+                    <p className="text-xs text-ink/50">Your exam is ready. Take it when you're prepared!</p>
                   </div>
                 </div>
                 <Button
                   onClick={() => nav(`/learning/${course.id}/exam`)}
-                  className={`text-xs ${
-                    isJoinableNow(examScheduledAt)
-                      ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-glow animate-pulse'
-                      : 'bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow'
-                  }`}
+                  className="bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow text-xs"
                 >
-                  {isJoinableNow(examScheduledAt) ? '🟢 Join Now' : 'Take Exam'}
+                  Take Exam
                 </Button>
               </div>
             )}

@@ -16,7 +16,7 @@ import { ScheduleLectureModal } from '../components/ui/ScheduleLectureModal';
 import { ScheduleExamModal } from '../components/ui/ScheduleExamModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
-import { useLearningStore, mockCourses, CURRENT_USER_ID } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningMockData';
 
 type Tab = 'learners' | 'lectures' | 'exams' | 'certificates';
 
@@ -30,12 +30,12 @@ export default function TeachingCourseDetail() {
   const [showScheduleLecture, setShowScheduleLecture] = useState(false);
   const [showScheduleExam, setShowScheduleExam] = useState(false);
 
-  const course = mockCourses.find(c => c.id === courseId);
+  const course = store.courses.find(c => c.id === courseId);
   const enrollments = course ? store.getCourseEnrollments(course.id) : [];
   const lectures = course ? store.getCourseLectures(course.id) : [];
-  const certRequests = course ? store.getCertificateRequests({ teacherId: CURRENT_USER_ID }).filter(r => r.courseId === course.id) : [];
+  const certRequests = course ? store.getCertificateRequests({ teacherId: store.currentUserId }).filter(r => r.courseId === course.id) : [];
 
-  if (!course || course.teacherId !== CURRENT_USER_ID) {
+  if (!course || course.teacherId !== store.currentUserId) {
     return (
       <main className="min-h-screen bg-surface">
         <Navbar variant="auth" />
