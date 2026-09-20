@@ -46,6 +46,8 @@ test('empty wanted skills contribute zero satisfaction and never divide by zero'
   assert.deepEqual(calculateCompatibility(skills(['python']), skills(['painting'])), {
     compatibility: 0, aSatisfaction: 0, bSatisfaction: 0, aMatchedWantedSkills: 0,
     bMatchedWantedSkills: 0, aWantedSkillCount: 0, bWantedSkillCount: 0,
+    availabilityOverlapScore: 0, levelCompatibilityScore: 0,
+    reasons: ['Potential for new skill discovery'],
   });
 });
 

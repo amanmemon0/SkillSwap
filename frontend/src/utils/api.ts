@@ -80,6 +80,13 @@ export const api = {
     return data;
   },
 
+  forgotPassword: async (payload: { email: string; newPassword: string }): Promise<{ message: string }> => {
+    return request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   getMe: async (): Promise<UserResponse> => {
     return request<UserResponse>('/api/auth/me');
   },

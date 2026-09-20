@@ -332,7 +332,51 @@ const adminDeleteUser = async (req, res, next) => {
   }
 };
 
-module.exports = { registerUser, loginUser, getMe, updateProfile, getPublicProfiles, getAllUsers, adminUpdateUser, adminDeleteUser };
+const forgotPassword = async (req, res, next) => {
+  try {
+    const { email, newPassword } = req.body;
+
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email.toLowerCase())
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (userError) return next(userError);
+    if (!user) {
+      return res.status(404).json({ message: 'No account found with this email address' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(newPassword, salt);
+
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({ password_hash: passwordHash })
+      .eq('id', user.id);
+
+    if (updateError) return next(updateError);
+
+    return res.status(200).json({
+      message: 'Password reset successfully. You can now sign in with your new password.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+module.exports = {
+  registerUser,
+  loginUser,
+  forgotPassword,
+  getMe,
+  updateProfile,
+  getPublicProfiles,
+  getAllUsers,
+  adminUpdateUser,
+  adminDeleteUser,
+};
 
 
 

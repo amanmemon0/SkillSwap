@@ -54,9 +54,10 @@ const calculateCompatibility = (userASkills, userBSkills, profileA = {}, profile
   const availBonus = availabilityOverlap(profileA.availability, profileB.availability) * 10;
 
   // Skill level compatibility bonus (up to 5 additional points, averaged for both directions)
+  const hasLevelInfo = Boolean(profileA.skill_level || profileB.skill_level);
   const aLevelBonus = skillLevelBonus(profileA.skill_level, profileB.skill_level) * 5;
   const bLevelBonus = skillLevelBonus(profileB.skill_level, profileA.skill_level) * 5;
-  const levelBonus = (aLevelBonus + bLevelBonus) / 2;
+  const levelBonus = hasLevelInfo ? (aLevelBonus + bLevelBonus) / 2 : 0;
 
   const rawScore = baseScore + availBonus + levelBonus;
   const compatibility = Math.min(100, Math.round(rawScore));

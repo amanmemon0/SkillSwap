@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { registerSchema, loginSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
+const { registerSchema, loginSchema, forgotPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
 const { validate } = require('../middleware/validate');
 
 test('register schema rejects invalid values', () => {
@@ -18,6 +18,17 @@ test('login schema accepts valid payload', () => {
 
   assert.equal(result.success, true);
   assert.deepEqual(result.data, { email: 'user@example.com', password: 'secret123' });
+});
+
+test('forgot password schema validates email and minimum password length', () => {
+  const valid = forgotPasswordSchema.safeParse({ email: 'test@example.com', newPassword: 'NewPassword123' });
+  assert.equal(valid.success, true);
+
+  const invalidEmail = forgotPasswordSchema.safeParse({ email: 'invalid-email', newPassword: 'NewPassword123' });
+  assert.equal(invalidEmail.success, false);
+
+  const shortPassword = forgotPasswordSchema.safeParse({ email: 'test@example.com', newPassword: '123' });
+  assert.equal(shortPassword.success, false);
 });
 
 test('profile update schema accepts the frontend profile payload and rejects empty updates', () => {

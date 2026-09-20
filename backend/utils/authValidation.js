@@ -39,9 +39,15 @@ const adminUserUpdateSchema = z.object({
   role: z.enum(['admin', 'user', 'Admin', 'User']).optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Provide a status or role to update');
 
+const forgotPasswordSchema = z.object({
+  email: z.string().trim().email('Please provide a valid email address'),
+  newPassword: z.string().min(6, 'Password must be at least 6 characters long'),
+});
+
 module.exports = {
   registerSchema,
   loginSchema,
   profileUpdateSchema,
   adminUserUpdateSchema,
+  forgotPasswordSchema,
 };

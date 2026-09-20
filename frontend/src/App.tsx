@@ -33,6 +33,7 @@ export default function App() {
       {/* Public Routes */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
+      <Route path="/forgot-password" element={<Login initialForgot={true} />} />
       <Route path="/register" element={<Register />} />
       <Route path="/explore" element={<ExploreSkills />} />
       <Route path="/match" element={<SkillMatch />} />
