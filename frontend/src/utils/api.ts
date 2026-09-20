@@ -168,6 +168,7 @@ export const api = {
   getMyTeaching: () => request<any[]>('/api/courses/mine/teaching'),
   getCourseEnrollments: (courseId: string) => request<any[]>(`/api/courses/${courseId}/enrollments`),
   getLectures: (courseId: string) => request<any[]>(`/api/courses/${courseId}/lectures`),
+  createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string; order: number }) => request<any>(`/api/courses/${courseId}/lectures`, { method: 'POST', body: JSON.stringify(payload) }),
   enrollCourse: (courseId: string) => request<any>(`/api/courses/${courseId}/enroll`, { method: 'POST' }),
   markAttendance: (lectureId: string) => request<any>(`/api/courses/lectures/${lectureId}/attendance`, { method: 'PUT', body: JSON.stringify({ status: 'present', minutesAttended: 45 }) }),
   requestExam: (courseId: string) => request<any>(`/api/courses/${courseId}/exam-request`, { method: 'POST' }),

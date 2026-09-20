@@ -28,7 +28,6 @@ import { StatusBadge } from '../components/ui/StatusBadge';
 import LiveFeed from '../components/LiveFeed';
 import Navbar from '../components/Navbar';
 import { useLearningStore } from '../data/learningMockData';
-import { supabase } from '../auth/supabaseClient';
 const sideLinks = [
   { to: '/dashboard', icon: Home, label: 'Dashboard' },
   { to: '/learning', icon: BookOpen, label: 'My Learning' },

@@ -31,7 +31,7 @@ export default function MyTeaching() {
   const myCourses = store.getMyTeachingCourses();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [newCourse, setNewCourse] = useState({ title: '', skillName: '', description: '', category: 'programming' });
+  const [newCourse, setNewCourse] = useState({ title: '', skillName: '', description: '', category: 'development' });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCreateCourse = async (e: React.FormEvent) => {
@@ -42,7 +42,7 @@ export default function MyTeaching() {
       await store.createCourse({ ...newCourse, status: 'published' });
       show('Course created successfully!', 'success');
       setShowCreateModal(false);
-      setNewCourse({ title: '', skillName: '', description: '', category: 'programming' });
+      setNewCourse({ title: '', skillName: '', description: '', category: 'development' });
     } catch (err: any) {
       show(err.message || 'Failed to create course', 'error');
     } finally {
@@ -231,11 +231,13 @@ export default function MyTeaching() {
                   onChange={e => setNewCourse({ ...newCourse, category: e.target.value })}
                   className="w-full rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm focus:border-violet focus:outline-none focus:ring-1 focus:ring-violet"
                 >
-                  <option value="programming">Programming</option>
+                  <option value="development">Development</option>
                   <option value="design">Design</option>
                   <option value="languages">Languages</option>
-                  <option value="music">Music</option>
+                  <option value="photography">Photography</option>
                   <option value="business">Business</option>
+                  <option value="communication">Communication</option>
+                  <option value="life_skills">Life Skills</option>
                   <option value="other">Other</option>
                 </select>
               </div>

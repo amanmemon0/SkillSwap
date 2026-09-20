@@ -1,12 +1,11 @@
 /* ═══════════════════════════════════════════════════════════
-   Notification Bell — Shows in-app notifications for learners
+   Notification Bell — Shows in-app notifications from backend
    ═══════════════════════════════════════════════════════════ */
 import { useRef, useState, useEffect } from 'react';
 import { Bell, BookOpen, FileText, ExternalLink, Check, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { useLearningStore, CURRENT_USER_ID } from '../data/learningMockData';
-import type { AppNotification } from '../data/skillswapTypes';
+import { api } from '../utils/api';
 
 function timeAgo(isoStr: string): string {
   const diff = Date.now() - new Date(isoStr).getTime();
@@ -18,23 +17,36 @@ function timeAgo(isoStr: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
-function isJoinable(scheduledAt: string): boolean {
-  const diff = new Date(scheduledAt).getTime() - Date.now();
-  return diff <= 15 * 60_000 && diff > -2 * 60 * 60_000; // within 15 min before or 2h after
-}
-
-function formatScheduled(scheduledAt: string): string {
-  const d = new Date(scheduledAt);
-  return d.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
-    ' at ' + d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
-
 export default function NotificationBell() {
   const [open, setOpen] = useState(false);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const ref = useRef<HTMLDivElement>(null);
   const nav = useNavigate();
-  const store = useLearningStore();
-  const notifications: AppNotification[] = store.getNotifications(CURRENT_USER_ID);
+
+  // Load notifications from backend
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const notifs = await api.getNotifications();
+        setNotifications(notifs.map((n: any) => ({
+          id: n.id,
+          title: n.title || 'Notification',
+          message: n.detail || n.message || '',
+          type: n.type || 'lecture',
+          courseId: n.course_id || '',
+          lectureId: n.lecture_id || '',
+          scheduledAt: n.scheduled_at || n.created_at || new Date().toISOString(),
+          read: n.read ?? true,
+          createdAt: n.created_at || new Date().toISOString(),
+        })));
+      } catch {
+        // Not logged in or API error — show empty
+        setNotifications([]);
+      }
+    };
+    load();
+  }, []);
+
   const unread = notifications.filter(n => !n.read).length;
 
   // Close on outside click
@@ -48,19 +60,33 @@ export default function NotificationBell() {
 
   const handleOpen = () => {
     setOpen(prev => !prev);
-    if (!open) {
-      // Mark all as read when opening
-      setTimeout(() => store.markAllNotificationsRead(CURRENT_USER_ID), 800);
+  };
+
+  const markRead = async (id: string | number) => {
+    try {
+      await api.markNotificationRead(id);
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    } catch {
+      // ignore
     }
   };
 
-  const handleJoin = (n: AppNotification) => {
-    store.markNotificationRead(n.id);
+  const markAllRead = async () => {
+    try {
+      await api.markAllNotificationsRead();
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleItemClick = (n: any) => {
+    markRead(n.id);
     setOpen(false);
-    if (n.type === 'lecture' && n.lectureId) {
+    if (n.courseId && n.lectureId) {
       nav(`/learning/${n.courseId}/lecture/${n.lectureId}`);
-    } else if (n.type === 'exam') {
-      nav(`/learning/${n.courseId}/exam`);
+    } else if (n.courseId) {
+      nav(`/learning/${n.courseId}`);
     }
   };
 
@@ -115,64 +141,46 @@ export default function NotificationBell() {
                 <div className="flex flex-col items-center justify-center py-10 text-ink/30">
                   <Bell size={28} className="mb-2" />
                   <p className="text-sm font-bold">No notifications yet</p>
-                  <p className="text-xs mt-0.5">You'll be notified when lectures or exams are scheduled</p>
+                  <p className="text-xs mt-0.5">You'll be notified about lectures and exams</p>
                 </div>
               ) : (
-                notifications.map(n => {
-                  const joinable = isJoinable(n.scheduledAt);
-                  return (
-                    <div
-                      key={n.id}
-                      className={`px-4 py-3.5 transition hover:bg-surface ${!n.read ? 'bg-violet/[0.02]' : ''}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        {/* Icon */}
-                        <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
-                          n.type === 'exam'
-                            ? 'bg-amber-100 text-amber-600'
-                            : 'bg-violet/10 text-violet'
-                        }`}>
-                          {n.type === 'exam' ? <FileText size={15} /> : <BookOpen size={15} />}
-                        </span>
+                notifications.map(n => (
+                  <div
+                    key={n.id}
+                    onClick={() => handleItemClick(n)}
+                    className={`px-4 py-3.5 transition hover:bg-surface cursor-pointer ${!n.read ? 'bg-violet/[0.02]' : ''}`}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <span className={`mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-xl ${
+                        n.type === 'exam'
+                          ? 'bg-amber-100 text-amber-600'
+                          : 'bg-violet/10 text-violet'
+                      }`}>
+                        {n.type === 'exam' ? <FileText size={15} /> : <BookOpen size={15} />}
+                      </span>
 
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <p className="text-sm font-bold text-ink truncate">{n.title}</p>
-                            {!n.read && (
-                              <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet" />
-                            )}
-                          </div>
-                          <p className="mt-0.5 text-xs text-ink/50 leading-4">{n.message}</p>
-
-                          <div className="mt-2 flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] font-bold text-ink/30 uppercase tracking-wider">
-                              {formatScheduled(n.scheduledAt)}
-                            </span>
-                            <span className="text-[10px] text-ink/20">·</span>
-                            <span className="text-[10px] text-ink/30">{timeAgo(n.createdAt)}</span>
-
-                            {joinable && (
-                              <button
-                                onClick={() => handleJoin(n)}
-                                className="ml-auto flex items-center gap-1 rounded-lg bg-gradient-to-r from-violet to-electric px-2.5 py-1 text-[10px] font-extrabold text-white hover:shadow-glow transition"
-                              >
-                                <ExternalLink size={10} /> Join Now
-                              </button>
-                            )}
-                          </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-bold text-ink truncate">{n.title}</p>
+                          {!n.read && (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet" />
+                          )}
                         </div>
+                        <p className="mt-0.5 text-xs text-ink/50 leading-4">{n.message}</p>
+                        <span className="mt-1.5 block text-[10px] text-ink/30">{timeAgo(n.createdAt)}</span>
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               )}
             </div>
 
             {/* Footer */}
-            {notifications.length > 0 && (
+            {unread > 0 && (
               <div className="border-t border-ink/5 px-4 py-3 bg-surface/50">
                 <button
-                  onClick={() => { store.markAllNotificationsRead(CURRENT_USER_ID); }}
+                  onClick={markAllRead}
                   className="flex items-center gap-1.5 text-xs font-bold text-ink/40 hover:text-violet transition"
                 >
                   <Check size={12} /> Mark all as read
