@@ -2,13 +2,15 @@
    My Teaching — Hub page showing courses the user teaches
    ═══════════════════════════════════════════════════════════ */
 import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import {
   BookOpen, Compass, GraduationCap, Home, MessageCircle, ArrowRightLeft,
-  Settings, Award, ChevronRight, User, FileText,
+  Settings, Award, ChevronRight, User, FileText, Plus, X
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button, SkillTag } from '../components/ui/Primitives';
 import { EmptyState } from '../components/ui/EmptyState';
+import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
 import { useLearningStore } from '../data/learningMockData';
 
@@ -25,7 +27,28 @@ const sideLinks = [
 export default function MyTeaching() {
   const nav = useNavigate();
   const store = useLearningStore();
+  const { toasts, show, dismiss } = useToast();
   const myCourses = store.getMyTeachingCourses();
+  
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCourse, setNewCourse] = useState({ title: '', skillName: '', description: '', category: 'programming' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleCreateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCourse.title || !newCourse.skillName) return;
+    setIsSubmitting(true);
+    try {
+      await store.createCourse({ ...newCourse, status: 'published' });
+      show('Course created successfully!', 'success');
+      setShowCreateModal(false);
+      setNewCourse({ title: '', skillName: '', description: '', category: 'programming' });
+    } catch (err: any) {
+      show(err.message || 'Failed to create course', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-surface">
@@ -64,10 +87,15 @@ export default function MyTeaching() {
           {/* Main Content */}
           <div className="space-y-6">
             {/* Header */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-              <p className="eyebrow">Teacher</p>
-              <h1 className="mt-2 font-display text-3xl font-bold sm:text-4xl">My Teaching</h1>
-              <p className="mt-1 text-sm text-ink/50">Courses and skills you're teaching to other SkillSwap users</p>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+              <div>
+                <p className="eyebrow">Teacher</p>
+                <h1 className="mt-2 font-display text-3xl font-bold sm:text-4xl">My Teaching</h1>
+                <p className="mt-1 text-sm text-ink/50">Courses and skills you're teaching to other SkillSwap users</p>
+              </div>
+              <Button onClick={() => setShowCreateModal(true)} className="bg-gradient-to-r from-violet to-electric text-white whitespace-nowrap">
+                <Plus size={18} /> Create Course
+              </Button>
             </motion.div>
 
             {myCourses.length === 0 ? (
@@ -76,7 +104,7 @@ export default function MyTeaching() {
                 title="Not teaching yet"
                 description="Create a course to share your skills with the SkillSwap community!"
                 actionLabel="Create Course"
-                onAction={() => nav('/profile')}
+                onAction={() => setShowCreateModal(true)}
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
@@ -156,6 +184,85 @@ export default function MyTeaching() {
           </div>
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+          >
+            <button
+              onClick={() => setShowCreateModal(false)}
+              className="absolute right-6 top-6 text-ink/40 hover:text-ink transition"
+            >
+              <X size={20} />
+            </button>
+            <h2 className="font-display text-2xl font-bold">Create New Course</h2>
+            <p className="text-sm text-ink/50 mt-1 mb-6">Share your knowledge with others.</p>
+
+            <form onSubmit={handleCreateCourse} className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-ink/70">Course Title <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={newCourse.title}
+                  onChange={e => setNewCourse({ ...newCourse, title: e.target.value })}
+                  placeholder="e.g. Master React in 30 Days"
+                  className="w-full rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm focus:border-violet focus:outline-none focus:ring-1 focus:ring-violet"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-ink/70">Skill Name <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  required
+                  value={newCourse.skillName}
+                  onChange={e => setNewCourse({ ...newCourse, skillName: e.target.value })}
+                  placeholder="e.g. ReactJS"
+                  className="w-full rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm focus:border-violet focus:outline-none focus:ring-1 focus:ring-violet"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-ink/70">Category</label>
+                <select
+                  value={newCourse.category}
+                  onChange={e => setNewCourse({ ...newCourse, category: e.target.value })}
+                  className="w-full rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm focus:border-violet focus:outline-none focus:ring-1 focus:ring-violet"
+                >
+                  <option value="programming">Programming</option>
+                  <option value="design">Design</option>
+                  <option value="languages">Languages</option>
+                  <option value="music">Music</option>
+                  <option value="business">Business</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1.5 block text-xs font-bold text-ink/70">Description</label>
+                <textarea
+                  rows={3}
+                  value={newCourse.description}
+                  onChange={e => setNewCourse({ ...newCourse, description: e.target.value })}
+                  placeholder="What will students learn?"
+                  className="w-full rounded-xl border border-ink/10 bg-surface px-4 py-3 text-sm focus:border-violet focus:outline-none focus:ring-1 focus:ring-violet resize-none"
+                />
+              </div>
+
+              <div className="pt-4 flex justify-end gap-3">
+                <Button type="button" onClick={() => setShowCreateModal(false)} className="bg-surface text-ink hover:bg-ink/5">
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting} className="bg-gradient-to-r from-violet to-electric text-white min-w-[120px]">
+                  {isSubmitting ? 'Creating...' : 'Create Course'}
+                </Button>
+              </div>
+            </form>
+          </motion.div>
+        </div>
+      )}
+      <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </main>
   );
 }

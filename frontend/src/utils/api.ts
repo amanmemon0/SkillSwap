@@ -163,6 +163,7 @@ export const api = {
   getProfiles: () => request<any[]>('/api/auth/profiles'),
   listCourses: () => request<any[]>('/api/courses'),
   getCourse: (id: string) => request<any>(`/api/courses/${id}`),
+  createCourse: (payload: { title: string; skillName: string; description?: string; category?: string; status?: string }) => request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
   getMyLearning: () => request<any[]>('/api/courses/mine/learning'),
   getMyTeaching: () => request<any[]>('/api/courses/mine/teaching'),
   getCourseEnrollments: (courseId: string) => request<any[]>(`/api/courses/${courseId}/enrollments`),
