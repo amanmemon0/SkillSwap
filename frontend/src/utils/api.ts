@@ -180,8 +180,14 @@ export const api = {
   getMessages: (conversationId: string) => request<any[]>(`/api/conversations/${conversationId}/messages`),
   sendMessage: (conversationId: string, body: string) => request<any>(`/api/conversations/${conversationId}/messages`, { method: 'POST', body: JSON.stringify({ body }) }),
 
+  // Compatibility & User Profiles
+  getCompatibility: (userId: string) => request<any>(`/api/matches/${userId}`),
+  getUserProfile: (userId: string) => request<any>(`/api/users/${userId}`),
+  getUsers: () => request<any[]>('/api/users'),
+  submitReview: (userId: string, payload: { rating: number; comment?: string; exchangeId?: string }) =>
+    request<any>(`/api/users/${userId}/reviews`, { method: 'POST', body: JSON.stringify(payload) }),
+
   logout: () => {
     clearToken();
   },
 };
-

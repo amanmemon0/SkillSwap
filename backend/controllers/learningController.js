@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const supabase = require('../config/db');
 
 const respondDbError = (res, error, fallback = 'Database operation failed') => res.status(error?.code === '23505' ? 409 : 400).json({ message: error?.message || fallback });
@@ -44,9 +43,32 @@ const updateCourse = async (req, res, next) => {
 const deleteCourse = async (req, res, next) => {
   try { const { data, error } = await supabase.from('courses').delete().eq('id', req.params.courseId).eq('teacher_id', req.user.id).eq('status', 'draft').select('id').maybeSingle(); if (error) return respondDbError(res, error); if (!data) return res.status(404).json({ message: 'Draft course not found or not owned by you' }); return res.status(204).end(); } catch (error) { return next(error); }
 };
+
 const enroll = async (req, res, next) => {
-  try { const { data: course, error: courseError } = await supabase.from('courses').select('id, teacher_id, status').eq('id', req.params.courseId).maybeSingle(); if (courseError) return respondDbError(res, courseError); if (!course) return res.status(404).json({ message: 'Course not found' }); if (course.status !== 'published') return res.status(409).json({ message: 'Only published courses can be enrolled in' }); if (course.teacher_id === req.user.id) return res.status(400).json({ message: 'Teachers cannot enroll in their own courses' }); const { data, error } = await supabase.from('course_enrollments').insert({ course_id: course.id, learner_id: req.user.id }).select().single(); if (error) return respondDbError(res, error, 'Unable to enroll in course'); return res.status(201).json(data); } catch (error) { return next(error); }
+  try {
+    const { data: course, error: courseError } = await supabase.from('courses').select('id, teacher_id, status').eq('id', req.params.courseId).maybeSingle();
+    if (courseError) return respondDbError(res, courseError);
+    if (!course) return res.status(404).json({ message: 'Course not found' });
+    if (course.status !== 'published') return res.status(409).json({ message: 'Only published courses can be enrolled in' });
+    if (course.teacher_id === req.user.id) return res.status(400).json({ message: 'Teachers cannot enroll in their own courses' });
+
+    // Check learner credits (25 required to enroll via non-swap path)
+    const { data: learnerProfile } = await supabase.from('profiles').select('credits').eq('id', req.user.id).maybeSingle();
+    const currentCredits = learnerProfile?.credits ?? 0;
+    if (currentCredits < 25) {
+      return res.status(402).json({ message: `Insufficient credits. You need 25 credits to enroll (you have ${currentCredits}).` });
+    }
+
+    const { data, error } = await supabase.from('course_enrollments').insert({ course_id: course.id, learner_id: req.user.id }).select().single();
+    if (error) return respondDbError(res, error, 'Unable to enroll in course');
+
+    // Deduct 25 credits after successful enrollment
+    await supabase.from('profiles').update({ credits: currentCredits - 25 }).eq('id', req.user.id);
+
+    return res.status(201).json(data);
+  } catch (error) { return next(error); }
 };
+
 const dropEnrollment = async (req, res, next) => {
   try { const { data, error } = await supabase.from('course_enrollments').update({ status: 'dropped' }).eq('course_id', req.params.courseId).eq('learner_id', req.user.id).eq('status', 'active').select().maybeSingle(); if (error) return respondDbError(res, error); if (!data) return res.status(404).json({ message: 'Active enrollment not found' }); return res.json(data); } catch (error) { return next(error); }
 };

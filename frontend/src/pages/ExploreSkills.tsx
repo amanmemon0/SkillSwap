@@ -26,10 +26,11 @@ export default function ExploreSkills() {
       try {
         const dbProfiles = await api.getProfiles();
 
-        const mapped = (dbProfiles || []).map(p => {
+          const mapped = (dbProfiles || []).map(p => {
           const wantsList = Array.isArray(p.learning_skills) ? p.learning_skills : [];
           const distVal = ((p.full_name?.length || 5) % 5) + 0.8;
           return {
+            id: p.id,
             name: p.full_name || 'Member',
             location: p.location || 'Nearby',
             skillOffered: p.primary_skill || 'Various Skills',
@@ -40,7 +41,8 @@ export default function ExploreSkills() {
             level: p.skill_level || 'Intermediate',
             online: true,
             mode: p.learning_mode || 'Online',
-            availability: Array.isArray(p.availability) ? p.availability : []
+            availability: Array.isArray(p.availability) ? p.availability : [],
+            _raw: p,
           };
         });
         setUsers(mapped);
@@ -331,9 +333,9 @@ export default function ExploreSkills() {
                       <span>🔄 {user.exchanges}</span>
                       <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-bold">{user.level}</span>
                     </div>
-                    <Link to="/match">
+                    <Link to={`/users/${user.id}`} state={{ matchedUser: user._raw }}>
                       <Button className="bg-violet/10 text-violet hover:bg-violet hover:text-white text-xs py-2 px-3">
-                        View Match
+                        View Profile
                       </Button>
                     </Link>
                   </div>

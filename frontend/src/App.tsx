@@ -25,6 +25,7 @@ import CertificateView from './pages/CertificateView';
 import CertificateVerify from './pages/CertificateVerify';
 
 import NotFound from './pages/NotFound';
+import PublicUserProfile from './pages/PublicUserProfile';
 
 export default function App() {
   return (
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/match" element={<SkillMatch />} />
       <Route path="/exchange-request" element={<ExchangeRequest />} />
       <Route path="/certificates/verify" element={<CertificateVerify />} />
+      <Route path="/users/:id" element={<PublicUserProfile />} />
 
       {/* Admin Routes */}
       <Route path="/admin" element={<ProtectedRoute role="admin"><Admin /></ProtectedRoute>} />

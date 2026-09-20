@@ -16,6 +16,7 @@ const courseRoutes = require('./routes/courseRoutes');
 const messageRoutes = require('./routes/messageRoutes');
 const socialRoutes = require('./routes/socialRoutes');
 const matchRoutes = require('./routes/matchRoutes');
+const userRoutes = require('./routes/userRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -59,6 +60,7 @@ app.use('/api/courses', courseRoutes);
 app.use('/api', messageRoutes);
 app.use('/api', socialRoutes);
 app.use('/api', matchRoutes);
+app.use('/api/users', userRoutes);
 
 app.use((err, req, res, next) => {
   console.error(err);

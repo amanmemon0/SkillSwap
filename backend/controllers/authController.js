@@ -24,6 +24,9 @@ const serializeUser = (user, profile, token) => ({
   learning_skills: profile.learning_skills || [],
   availability: profile.availability || [],
   learning_mode: profile.learning_mode || 'Both',
+  credits: profile.credits ?? 50,
+  rating: profile.rating ?? null,
+  completed_swaps: profile.completed_swaps ?? 0,
   ...(token ? { token } : {}),
 });
 
@@ -47,6 +50,7 @@ const registerUser = async (req, res, next) => {
       availability,
       learning_mode: learningMode,
       role: 'user',
+      credits: 50,
     };
 
     // Check if username already exists

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Check, Calendar, Clock, Send } from 'lucide-react';
+import { ArrowLeft, Check, Calendar, Clock, Send, Coins, ChevronDown } from 'lucide-react';
 import Navbar from '../components/Navbar';
 import { Avatar, Button, ExchangeVis } from '../components/ui/Primitives';
 import { api } from '../utils/api';
@@ -20,6 +20,9 @@ export default function ExchangeRequest() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [senderSkillId, setSenderSkillId] = useState<string>('');
   const [receiverSkillId, setReceiverSkillId] = useState<string>('');
+  const [mySkills, setMySkills] = useState<any[]>([]);
+  const [theirSkills, setTheirSkills] = useState<any[]>([]);
+  const [compatibility, setCompatibility] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -35,6 +38,7 @@ export default function ExchangeRequest() {
           learning_skills: me.learning_skills,
           skill_level: me.skill_level,
           bio: me.bio,
+          credits: me.credits ?? 50,
         };
         setCurrentUser(myProfile);
 
@@ -45,29 +49,49 @@ export default function ExchangeRequest() {
         }
         setTargetUser(partner);
 
+        // Fetch skills from DB
         const dbSkills = await api.getSkills();
 
+        // My offered skills
+        let senderSkills: any[] = [];
         if (dbSkills && dbSkills.length > 0) {
           const mySkillName = (myProfile?.primary_skill || '').toLowerCase();
-          let mySkill = dbSkills.find(s => 
+          // Try to find my primary skill in the DB
+          const matchedMySkill = dbSkills.find((s: any) =>
             s.name.toLowerCase() === mySkillName ||
             s.name.toLowerCase().includes(mySkillName) ||
             (mySkillName && mySkillName.includes(s.name.toLowerCase()))
           );
-          if (!mySkill) mySkill = dbSkills[0];
-          if (mySkill) setSenderSkillId(mySkill.id);
+          senderSkills = matchedMySkill ? [matchedMySkill, ...dbSkills.filter((s: any) => s.id !== matchedMySkill.id)] : dbSkills;
+          setMySkills(senderSkills);
+          setSenderSkillId(senderSkills[0]?.id || '');
+        }
 
+        // Their offered skills
+        if (partner && dbSkills && dbSkills.length > 0) {
           const theirSkillName = (partner?.primary_skill || partner?.skillOffered || '').toLowerCase();
-          let theirSkill = dbSkills.find(s => 
+          const matchedTheirSkill = dbSkills.find((s: any) =>
             s.name.toLowerCase() === theirSkillName ||
             s.name.toLowerCase().includes(theirSkillName) ||
             (theirSkillName && theirSkillName.includes(s.name.toLowerCase()))
           );
-          if (!theirSkill) {
-            theirSkill = dbSkills.find(s => s.id !== mySkill?.id) || dbSkills[0];
-          }
-          if (theirSkill) setReceiverSkillId(theirSkill.id);
+          const theirList = matchedTheirSkill
+            ? [matchedTheirSkill, ...dbSkills.filter((s: any) => s.id !== matchedTheirSkill.id)]
+            : dbSkills;
+          setTheirSkills(theirList);
+          setReceiverSkillId(theirList[0]?.id || '');
         }
+
+        // Fetch real compatibility score
+        if (partner?.id) {
+          try {
+            const compat = await api.getCompatibility(partner.id);
+            setCompatibility(compat);
+          } catch {
+            // non-critical, skip
+          }
+        }
+
         setLoading(false);
       } catch (err) {
         console.error('Error loading skills/profile:', err);
@@ -85,7 +109,7 @@ export default function ExchangeRequest() {
       return;
     }
     if (!senderSkillId || !receiverSkillId) {
-      setErrorMsg('Unable to determine skill IDs. Make sure both users have valid skills.');
+      setErrorMsg('Please select skills for both sides of the exchange.');
       return;
     }
     setErrorMsg('');
@@ -150,16 +174,19 @@ export default function ExchangeRequest() {
   }
 
   const partnerName = targetUser?.full_name || targetUser?.name || 'Partner';
-  const partnerSkill = targetUser?.primary_skill || targetUser?.skillOffered || 'Skill';
   const partnerLocation = targetUser?.location || 'Nearby';
+  const compatScore = compatibility?.compatibility ?? null;
+
+  const senderSkillName = mySkills.find(s => s.id === senderSkillId)?.name || 'Your Skill';
+  const receiverSkillName = theirSkills.find(s => s.id === receiverSkillId)?.name || 'Their Skill';
 
   return (
     <main className="min-h-screen bg-surface text-ink">
       <Navbar />
 
       <section className="section-container py-10">
-        <Link to="/match" className="inline-flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition mb-6">
-          <ArrowLeft size={16} /> Back to match
+        <Link to="/explore" className="inline-flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition mb-6">
+          <ArrowLeft size={16} /> Back to explore
         </Link>
 
         <div className="mx-auto max-w-2xl">
@@ -189,15 +216,39 @@ export default function ExchangeRequest() {
                   <p className="text-xs text-ink/50">{partnerLocation} · 🟢 Online</p>
                 </div>
               </div>
-              <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
-                92% Match
-              </span>
+              {compatScore !== null ? (
+                <span className={`rounded-full px-3 py-1 text-[10px] font-bold text-white ${
+                  compatScore >= 80 ? 'bg-gradient-to-r from-emerald-500 to-green-400' :
+                  compatScore >= 60 ? 'bg-gradient-to-r from-violet to-electric' :
+                  'bg-gradient-to-r from-amber-500 to-orange-400'
+                }`}>
+                  {compatScore}% Match
+                </span>
+              ) : (
+                <span className="rounded-full bg-gradient-to-r from-violet to-electric px-3 py-1 text-[10px] font-bold text-white">
+                  Calculating...
+                </span>
+              )}
             </div>
 
-            <ExchangeVis 
-              yourSkill={currentUser?.primary_skill || 'Your Skill'} 
-              theirSkill={partnerSkill} 
+            <ExchangeVis
+              yourSkill={senderSkillName}
+              theirSkill={receiverSkillName}
             />
+          </motion.div>
+
+          {/* Credit cost notice */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="mt-4 rounded-2xl bg-amber-50 border border-amber-100 p-4 flex items-center gap-3"
+          >
+            <Coins size={18} className="text-amber-600 flex-shrink-0" />
+            <div>
+              <p className="text-sm font-bold text-amber-800">Credit Cost: 10 credits each</p>
+              <p className="text-xs text-amber-600">When your partner accepts, 10 credits will be deducted from both accounts. You have <strong>{currentUser?.credits ?? 50}</strong> credits.</p>
+            </div>
           </motion.div>
 
           {/* Request Form */}
@@ -213,6 +264,44 @@ export default function ExchangeRequest() {
                 {errorMsg}
               </div>
             )}
+
+            {/* Skill Selectors */}
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="text-sm font-bold block mb-2">
+                  Your Skill to Offer
+                </label>
+                <div className="relative">
+                  <select
+                    value={senderSkillId}
+                    onChange={(e) => setSenderSkillId(e.target.value)}
+                    className="field appearance-none pr-8"
+                  >
+                    {mySkills.map((skill) => (
+                      <option key={skill.id} value={skill.id}>{skill.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 pointer-events-none" />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-bold block mb-2">
+                  Their Skill You Want
+                </label>
+                <div className="relative">
+                  <select
+                    value={receiverSkillId}
+                    onChange={(e) => setReceiverSkillId(e.target.value)}
+                    className="field appearance-none pr-8"
+                  >
+                    {theirSkills.map((skill) => (
+                      <option key={skill.id} value={skill.id}>{skill.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 pointer-events-none" />
+                </div>
+              </div>
+            </div>
 
             {/* Message */}
             <div>
