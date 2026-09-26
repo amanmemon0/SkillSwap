@@ -4,7 +4,7 @@ const supabase = require('../config/db');
 
 const generateToken = (id, email) => {
   return jwt.sign({ id, email }, process.env.JWT_SECRET, {
-    expiresIn: '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 };
 
@@ -367,6 +367,7 @@ const forgotPassword = async (req, res, next) => {
 };
 
 module.exports = {
+  generateToken,
   registerUser,
   loginUser,
   forgotPassword,
@@ -377,6 +378,5 @@ module.exports = {
   adminUpdateUser,
   adminDeleteUser,
 };
-
 
 
