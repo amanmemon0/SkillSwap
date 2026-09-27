@@ -10,6 +10,17 @@ const generateToken = (id, email) => {
 
 const normalizeRole = (role) => String(role || 'user').toLowerCase() === 'admin' ? 'admin' : 'user';
 
+// Keep this list explicit: the endpoint is an admin tool, not a way to query
+// arbitrary PostgREST relations supplied by a client.
+const adminTables = [
+  'users', 'profiles', 'skills', 'member_skills', 'skill_requests',
+  'exchanges', 'notifications', 'conversations', 'messages', 'reviews',
+  'courses', 'course_enrollments', 'lectures', 'lecture_attendance',
+  'exams', 'exam_questions', 'exam_attempts', 'certificate_requests',
+  'certificates', 'lecture_messages', 'community_posts', 'post_comments',
+  'post_reactions',
+];
+
 const serializeUser = (user, profile, token) => ({
   _id: user.id,
   name: profile.full_name || 'Member',
@@ -209,6 +220,7 @@ const updateProfile = async (req, res, next) => {
 
 const getPublicProfiles = async (req, res, next) => {
   try {
+    const search = String(req.query.search || '').trim();
     const { data: profiles, error } = await supabase
       .from('profiles')
       .select('id, full_name, username, location, city, state, country, bio, primary_skill, skill_level, learning_skills, availability, learning_mode, rating, total_reviews, completed_swaps, status, role')
@@ -216,7 +228,37 @@ const getPublicProfiles = async (req, res, next) => {
       .neq('status', 'Banned');
 
     if (error) return next(error);
-    return res.status(200).json(profiles || []);
+    const uniqueProfiles = [...new Map((profiles || []).map((profile) => [profile.id, profile])).values()];
+    if (!search) return res.status(200).json(uniqueProfiles);
+
+    const query = search.toLowerCase();
+    return res.status(200).json(uniqueProfiles.filter((profile) => {
+      const searchable = [
+        profile.full_name, profile.username, profile.primary_skill, profile.bio,
+        ...(Array.isArray(profile.learning_skills) ? profile.learning_skills : []),
+      ].filter(Boolean).join(' ').toLowerCase();
+      return searchable.includes(query);
+    }));
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getAdminTableData = async (req, res, next) => {
+  try {
+    const table = String(req.params.table || '');
+    if (!adminTables.includes(table)) {
+      return res.status(404).json({ message: 'Unknown database table' });
+    }
+    const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize, 10) || 25));
+    const from = (page - 1) * pageSize;
+    const { data, error, count } = await supabase
+      .from(table)
+      .select('*', { count: 'exact' })
+      .range(from, from + pageSize - 1);
+    if (error) return next(error);
+    return res.json({ table, rows: data || [], total: count || 0, page, pageSize });
   } catch (error) {
     return next(error);
   }
@@ -375,6 +417,7 @@ module.exports = {
   updateProfile,
   getPublicProfiles,
   getAllUsers,
+  getAdminTableData,
   adminUpdateUser,
   adminDeleteUser,
 };

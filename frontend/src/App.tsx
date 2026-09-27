@@ -18,6 +18,7 @@ import MyLearning from './pages/MyLearning';
 import LearningCourseDetail from './pages/LearningCourseDetail';
 import LiveLecture from './pages/LiveLecture';
 import MyTeaching from './pages/MyTeaching';
+import CreateCourse from './pages/CreateCourse';
 import TeachingCourseDetail from './pages/TeachingCourseDetail';
 import ExamPage from './pages/ExamPage';
 import CertificatePage from './pages/CertificatePage';
@@ -59,6 +60,7 @@ export default function App() {
 
       {/* Teaching Routes */}
       <Route path="/teaching" element={<ProtectedRoute role="user"><MyTeaching /></ProtectedRoute>} />
+      <Route path="/teaching/create" element={<ProtectedRoute role="user"><CreateCourse /></ProtectedRoute>} />
       <Route path="/teaching/:courseId" element={<ProtectedRoute role="user"><TeachingCourseDetail /></ProtectedRoute>} />
 
       {/* Certificate Routes */}

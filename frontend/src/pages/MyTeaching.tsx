@@ -4,7 +4,7 @@
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import {
   BookOpen, Compass, GraduationCap, Home, MessageCircle, ArrowRightLeft,
-  Settings, Award, ChevronRight, User, FileText,
+  Settings, Award, ChevronRight, User, FileText, Plus,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button, SkillTag } from '../components/ui/Primitives';
@@ -68,6 +68,9 @@ export default function MyTeaching() {
               <p className="eyebrow">Teacher</p>
               <h1 className="mt-2 font-display text-3xl font-bold sm:text-4xl">My Teaching</h1>
               <p className="mt-1 text-sm text-ink/50">Courses and skills you're teaching to other SkillSwap users</p>
+              <Link to="/teaching/create" className="mt-4 inline-flex">
+                <Button className="bg-gradient-to-r from-violet to-electric text-white"><Plus size={16} /> Create Course</Button>
+              </Link>
             </motion.div>
 
             {myCourses.length === 0 ? (
@@ -76,7 +79,7 @@ export default function MyTeaching() {
                 title="Not teaching yet"
                 description="Create a course to share your skills with the SkillSwap community!"
                 actionLabel="Create Course"
-                onAction={() => nav('/profile')}
+                onAction={() => nav('/teaching/create')}
               />
             ) : (
               <div className="grid gap-4 md:grid-cols-2">

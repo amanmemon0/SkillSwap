@@ -1,5 +1,5 @@
 const express = require('express');
-const { registerUser, loginUser, forgotPassword, getMe, updateProfile, getPublicProfiles, getAllUsers, adminUpdateUser, adminDeleteUser } = require('../controllers/authController');
+const { registerUser, loginUser, forgotPassword, getMe, updateProfile, getPublicProfiles, getAllUsers, getAdminTableData, adminUpdateUser, adminDeleteUser } = require('../controllers/authController');
 const { protect, isAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
 const { registerSchema, loginSchema, forgotPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
@@ -15,6 +15,7 @@ router.get('/profiles', getPublicProfiles);
 
 // Admin routes
 router.get('/admin/users', protect, isAdmin, getAllUsers);
+router.get('/admin/tables/:table', protect, isAdmin, getAdminTableData);
 router.put('/admin/users/:id', protect, isAdmin, validate(adminUserUpdateSchema), adminUpdateUser);
 router.delete('/admin/users/:id', protect, isAdmin, adminDeleteUser);
 module.exports = router;
