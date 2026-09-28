@@ -14,6 +14,7 @@ export interface UserResponse {
   learning_skills: string[];
   availability: string[];
   learning_mode: string;
+  credits: number;
   token?: string;
 }
 
@@ -160,12 +161,15 @@ export const api = {
   },
 
   getSkills: () => request<any[]>('/api/skills'),
-  getProfiles: () => request<any[]>('/api/auth/profiles'),
+  getProfiles: (search?: string) => request<any[]>(`/api/auth/profiles${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  adminGetTable: (table: string, page = 1, pageSize = 25) => request<{ table: string; rows: Record<string, unknown>[]; total: number; page: number; pageSize: number }>(`/api/auth/admin/tables/${encodeURIComponent(table)}?page=${page}&pageSize=${pageSize}`),
   listCourses: () => request<any[]>('/api/courses'),
   getCourse: (id: string) => request<any>(`/api/courses/${id}`),
   createCourse: (payload: { title: string; skillName: string; description?: string; category?: string; status?: string }) => request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
   getMyLearning: () => request<any[]>('/api/courses/mine/learning'),
   getMyTeaching: () => request<any[]>('/api/courses/mine/teaching'),
+  createCourse: (payload: { skillName: string; title: string; description: string; creditCost: number; status?: 'draft' | 'published' }) =>
+    request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
   getCourseEnrollments: (courseId: string) => request<any[]>(`/api/courses/${courseId}/enrollments`),
   getLectures: (courseId: string) => request<any[]>(`/api/courses/${courseId}/lectures`),
   createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string; order: number }) => request<any>(`/api/courses/${courseId}/lectures`, { method: 'POST', body: JSON.stringify(payload) }),

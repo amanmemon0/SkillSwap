@@ -25,12 +25,12 @@ export default function CertificateVerify() {
     <main className="min-h-screen bg-surface">
       <Navbar />
       <div className="mx-auto max-w-xl px-5 py-12 sm:px-8">
-        <Link
+        {/* <Link
           to="/"
           className="mb-6 flex items-center gap-2 text-sm font-bold text-ink/50 hover:text-violet transition"
         >
           <ArrowLeft size={16} /> Back to SkillSwap
-        </Link>
+        </Link> */}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

@@ -8,7 +8,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'test-service-role-key';
 
 const { calculateCompatibility, getCompatibilityMatch } = require('../services/compatibilityService');
 const { createGetCompatibility } = require('../controllers/matchController');
-const { protect } = require('../middleware/auth');
+const { protect, createProtect } = require('../middleware/auth');
 
 const skills = (offers = [], wants = []) => [
   ...offers.map((skill_id) => ({ type: 'offer', skill_id })),
@@ -80,7 +80,18 @@ test('authentication is required and client-supplied compatibility cannot overri
   const handler = createGetCompatibility(async (_db, currentUserId, matchedUserId) => ({ compatibility: 50, currentUserId, matchedUserId }));
   const token = jwt.sign({ id: 'current-user' }, process.env.JWT_SECRET);
   const req = { headers: { authorization: `Bearer ${token}` }, params: { userId: 'other-user' }, body: { compatibility: 100 } };
-  await new Promise((resolve) => protect(req, { status: () => ({ json: resolve }) }, resolve));
+  const fakeDb = {
+    from: (table) => ({
+      select: () => ({
+        eq: () => ({
+          is: () => ({
+            maybeSingle: async () => ({ data: { id: 'current-user', ...(table === 'profiles' ? { status: 'Active' } : {}) }, error: null }),
+          }),
+        }),
+      }),
+    }),
+  };
+  await new Promise((resolve) => createProtect(fakeDb)(req, { status: () => ({ json: resolve }) }, resolve));
   let response;
   await handler(req, { json: (body) => { response = body; } }, (error) => { throw error; });
   assert.equal(response.compatibility, 50);

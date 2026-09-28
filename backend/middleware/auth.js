@@ -1,15 +1,46 @@
 const jwt = require('jsonwebtoken');
 
-const protect = async (req, res, next) => {
-  try {
-    const authHeader = req.headers.authorization;
+const createProtect = (supabase) => async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  const bearerMatch = typeof authHeader === 'string' && authHeader.match(/^Bearer ([^\s]+)$/);
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ message: 'Not authorized, no token provided' });
+  if (!bearerMatch) {
+    return res.status(401).json({ message: 'Not authorized, no token provided' });
+  }
+
+  try {
+    const decoded = jwt.verify(bearerMatch[1], process.env.JWT_SECRET);
+    if (!decoded || typeof decoded.id !== 'string' || !decoded.id) {
+      return res.status(401).json({ message: 'Not authorized, invalid or expired token' });
     }
 
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', decoded.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (userError) {
+      return res.status(500).json({ message: 'Unable to authenticate user' });
+    }
+    if (!user) {
+      return res.status(401).json({ message: 'Not authorized, user is unavailable' });
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, status')
+      .eq('id', decoded.id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (profileError) {
+      return res.status(500).json({ message: 'Unable to authenticate user' });
+    }
+    if (!profile || String(profile.status || '').toLowerCase() === 'banned') {
+      return res.status(401).json({ message: 'Not authorized, user is unavailable' });
+    }
 
     req.user = decoded;
     return next();
@@ -17,6 +48,8 @@ const protect = async (req, res, next) => {
     return res.status(401).json({ message: 'Not authorized, invalid or expired token' });
   }
 };
+
+const protect = createProtect(require('../config/db'));
 
 const isAdmin = async (req, res, next) => {
   try {
@@ -37,4 +70,4 @@ const isAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, isAdmin };
+module.exports = { protect, createProtect, isAdmin };

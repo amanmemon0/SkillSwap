@@ -2,6 +2,104 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { registerSchema, loginSchema, forgotPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
 const { validate } = require('../middleware/validate');
+const jwt = require('jsonwebtoken');
+
+process.env.SUPABASE_URL ||= 'http://localhost:54321';
+process.env.SUPABASE_SERVICE_ROLE_KEY ||= 'test-service-role-key';
+const { generateToken } = require('../controllers/authController');
+const { createProtect } = require('../middleware/auth');
+
+const makeAuthDb = ({ user = { id: 'user-123' }, profile = { id: 'user-123', status: 'Active' } } = {}) => ({
+  from(table) {
+    const result = table === 'users' ? user : profile;
+    const query = {
+      select() { return query; },
+      eq() { return query; },
+      is() { return query; },
+      maybeSingle: async () => ({ data: result, error: null }),
+    };
+    return query;
+  },
+});
+
+const runProtect = async (authorization, db = makeAuthDb()) => {
+  const req = { headers: authorization === undefined ? {} : { authorization } };
+  let statusCode = 200;
+  let responseBody;
+  let nextCalled = false;
+  const res = {
+    status(code) { statusCode = code; return this; },
+    json(body) { responseBody = body; return this; },
+  };
+  await createProtect(db)(req, res, () => { nextCalled = true; });
+  return { req, statusCode, responseBody, nextCalled };
+};
+
+test('protect accepts a valid bearer JWT and rejects missing, malformed, tampered, and expired tokens', async () => {
+  const previousSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'auth-middleware-test-secret';
+  try {
+    const validToken = jwt.sign({ id: 'user-123' }, process.env.JWT_SECRET, { expiresIn: '1h' });
+    const accepted = await runProtect(`Bearer ${validToken}`);
+    assert.equal(accepted.nextCalled, true);
+    assert.equal(accepted.req.user.id, 'user-123');
+
+    const expiredToken = jwt.sign({ id: 'user-123' }, process.env.JWT_SECRET, { expiresIn: -1 });
+    const invalidHeaders = [
+      undefined,
+      'Bearer',
+      `Bearer ${validToken} extra`,
+      `Bearer ${validToken.slice(0, -1)}x`,
+      `Bearer ${expiredToken}`,
+    ];
+    for (const header of invalidHeaders) {
+      const result = await runProtect(header);
+      assert.equal(result.statusCode, 401);
+      assert.equal(result.nextCalled, false);
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+  }
+});
+
+test('protect rejects deleted or unavailable accounts represented by otherwise valid JWTs', async () => {
+  const previousSecret = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = 'auth-middleware-test-secret';
+  try {
+    const token = jwt.sign({ id: 'user-123' }, process.env.JWT_SECRET);
+    for (const db of [makeAuthDb({ user: null }), makeAuthDb({ profile: null }), makeAuthDb({ profile: { id: 'user-123', status: 'Banned' } })]) {
+      const result = await runProtect(`Bearer ${token}`, db);
+      assert.equal(result.statusCode, 401);
+      assert.equal(result.nextCalled, false);
+    }
+  } finally {
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+  }
+});
+
+test('JWT uses configured JWT_EXPIRES_IN and contains only authentication claims', () => {
+  const previousSecret = process.env.JWT_SECRET;
+  const previousExpiry = process.env.JWT_EXPIRES_IN;
+  process.env.JWT_SECRET = 'auth-test-secret';
+  process.env.JWT_EXPIRES_IN = '2h';
+
+  try {
+    const token = generateToken('user-123', 'person@example.com');
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+
+    assert.equal(payload.id, 'user-123');
+    assert.equal(payload.email, 'person@example.com');
+    assert.equal(payload.exp - payload.iat, 7200);
+    assert.equal('password_hash' in payload, false);
+  } finally {
+    if (previousSecret === undefined) delete process.env.JWT_SECRET;
+    else process.env.JWT_SECRET = previousSecret;
+    if (previousExpiry === undefined) delete process.env.JWT_EXPIRES_IN;
+    else process.env.JWT_EXPIRES_IN = previousExpiry;
+  }
+});
 
 test('register schema rejects invalid values', () => {
   const result = registerSchema.safeParse({ name: 'A', username: '!', email: 'not-an-email', password: '123' });

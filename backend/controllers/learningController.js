@@ -35,10 +35,10 @@ const getCourse = async (req, res, next) => {
   } catch (error) { return next(error); }
 };
 const createCourse = async (req, res, next) => {
-  try { const b = req.body; const { data, error } = await supabase.from('courses').insert({ teacher_id: req.user.id, skill_id: b.skillId || null, skill_name: b.skillName, title: b.title, description: b.description || null, category: b.category || null, status: b.status || 'draft' }).select().single(); if (error) return respondDbError(res, error); return res.status(201).json(data); } catch (error) { return next(error); }
+  try { const b = req.body; const { data, error } = await supabase.from('courses').insert({ teacher_id: req.user.id, skill_id: b.skillId || null, skill_name: b.skillName, title: b.title, description: b.description || null, credit_cost: b.creditCost ?? 25, category: b.category || null, status: b.status || 'draft' }).select().single(); if (error) return respondDbError(res, error); return res.status(201).json(data); } catch (error) { return next(error); }
 };
 const updateCourse = async (req, res, next) => {
-  try { const b = req.body; const updates = {}; [['skillId', 'skill_id'], ['skillName', 'skill_name'], ['title', 'title'], ['description', 'description'], ['category', 'category'], ['status', 'status']].forEach(([from, to]) => { if (b[from] !== undefined) updates[to] = b[from]; }); const { data, error } = await supabase.from('courses').update(updates).eq('id', req.params.courseId).eq('teacher_id', req.user.id).select().maybeSingle(); if (error) return respondDbError(res, error); if (!data) return res.status(404).json({ message: 'Course not found or not owned by you' }); return res.json(data); } catch (error) { return next(error); }
+  try { const b = req.body; const updates = {}; [['skillId', 'skill_id'], ['skillName', 'skill_name'], ['title', 'title'], ['description', 'description'], ['creditCost', 'credit_cost'], ['category', 'category'], ['status', 'status']].forEach(([from, to]) => { if (b[from] !== undefined) updates[to] = b[from]; }); const { data, error } = await supabase.from('courses').update(updates).eq('id', req.params.courseId).eq('teacher_id', req.user.id).select().maybeSingle(); if (error) return respondDbError(res, error); if (!data) return res.status(404).json({ message: 'Course not found or not owned by you' }); return res.json(data); } catch (error) { return next(error); }
 };
 const deleteCourse = async (req, res, next) => {
   try { const { data, error } = await supabase.from('courses').delete().eq('id', req.params.courseId).eq('teacher_id', req.user.id).eq('status', 'draft').select('id').maybeSingle(); if (error) return respondDbError(res, error); if (!data) return res.status(404).json({ message: 'Draft course not found or not owned by you' }); return res.status(204).end(); } catch (error) { return next(error); }
@@ -46,24 +46,25 @@ const deleteCourse = async (req, res, next) => {
 
 const enroll = async (req, res, next) => {
   try {
-    const { data: course, error: courseError } = await supabase.from('courses').select('id, teacher_id, status').eq('id', req.params.courseId).maybeSingle();
+    const { data: course, error: courseError } = await supabase.from('courses').select('id, teacher_id, status, credit_cost').eq('id', req.params.courseId).maybeSingle();
     if (courseError) return respondDbError(res, courseError);
     if (!course) return res.status(404).json({ message: 'Course not found' });
     if (course.status !== 'published') return res.status(409).json({ message: 'Only published courses can be enrolled in' });
     if (course.teacher_id === req.user.id) return res.status(400).json({ message: 'Teachers cannot enroll in their own courses' });
 
-    // Check learner credits (25 required to enroll via non-swap path)
+    // Check learner credits against the price selected by the teacher.
     const { data: learnerProfile } = await supabase.from('profiles').select('credits').eq('id', req.user.id).maybeSingle();
     const currentCredits = learnerProfile?.credits ?? 0;
-    if (currentCredits < 25) {
-      return res.status(402).json({ message: `Insufficient credits. You need 25 credits to enroll (you have ${currentCredits}).` });
+    const creditCost = course.credit_cost ?? 25;
+    if (currentCredits < creditCost) {
+      return res.status(402).json({ message: `Insufficient credits. You need ${creditCost} credits to enroll (you have ${currentCredits}).` });
     }
 
     const { data, error } = await supabase.from('course_enrollments').insert({ course_id: course.id, learner_id: req.user.id }).select().single();
     if (error) return respondDbError(res, error, 'Unable to enroll in course');
 
-    // Deduct 25 credits after successful enrollment
-    await supabase.from('profiles').update({ credits: currentCredits - 25 }).eq('id', req.user.id);
+    // Deduct the course price after successful enrollment.
+    await supabase.from('profiles').update({ credits: currentCredits - creditCost }).eq('id', req.user.id);
 
     return res.status(201).json(data);
   } catch (error) { return next(error); }
