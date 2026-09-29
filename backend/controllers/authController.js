@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const supabase = require('../config/db');
 
 const generateToken = (id, email) => {
@@ -117,7 +118,6 @@ const registerUser = async (req, res, next) => {
       }
       return next(profileError);
     }
-
 
     return res.status(201).json(serializeUser(
       userData,
@@ -374,31 +374,113 @@ const adminDeleteUser = async (req, res, next) => {
   }
 };
 
+/**
+ * Step 1: Request a password reset.
+ * Accepts only { email }. Generates a short-lived token, stores it in the
+ * password_reset_tokens table, and sends it to the user via email.
+ *
+ * The response is always a 200 with a generic message to prevent user-enumeration.
+ */
 const forgotPassword = async (req, res, next) => {
   try {
-    const { email, newPassword } = req.body;
+    const { email } = req.body;
 
-    const { data: user, error: userError } = await supabase
+    const { data: user } = await supabase
       .from('users')
       .select('id, email')
       .eq('email', email.toLowerCase())
       .is('deleted_at', null)
       .maybeSingle();
 
-    if (userError) return next(userError);
+    // Always respond 200 to prevent email enumeration
     if (!user) {
-      return res.status(404).json({ message: 'No account found with this email address' });
+      return res.status(200).json({
+        message: 'If an account exists for that email, a reset link has been sent.',
+      });
     }
 
+    // Generate a cryptographically secure token
+    const plainToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(plainToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+
+    // Invalidate any existing tokens for this user first
+    await supabase
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('user_id', user.id)
+      .eq('used', false);
+
+    // Store hashed token
+    const { error: insertError } = await supabase
+      .from('password_reset_tokens')
+      .insert({ user_id: user.id, token_hash: tokenHash, expires_at: expiresAt });
+
+    if (insertError) return next(insertError);
+
+    // TODO: Replace this console.log with your transactional email provider.
+    // Recommended: Resend (https://resend.com) or SendGrid.
+    // Example with Resend:
+    //   const resend = new Resend(process.env.RESEND_API_KEY);
+    //   await resend.emails.send({
+    //     from: 'SkillSwap <noreply@skillswap.app>',
+    //     to: user.email,
+    //     subject: 'Reset your SkillSwap password',
+    //     html: `<p>Use this token to reset your password: <strong>${plainToken}</strong></p>
+    //            <p>It expires in 1 hour. If you did not request this, ignore this email.</p>`,
+    //   });
+    console.log(`[DEV ONLY] Password reset token for ${user.email}: ${plainToken}`);
+
+    return res.status(200).json({
+      message: 'If an account exists for that email, a reset link has been sent.',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+/**
+ * Step 2: Consume the token and set a new password.
+ * Accepts { token, newPassword }. Validates the token against the hashed value
+ * in the DB, checks expiry, and updates the password only if valid.
+ */
+const resetPassword = async (req, res, next) => {
+  try {
+    const { token, newPassword } = req.body;
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const { data: resetRecord, error: lookupError } = await supabase
+      .from('password_reset_tokens')
+      .select('id, user_id, expires_at, used')
+      .eq('token_hash', tokenHash)
+      .maybeSingle();
+
+    if (lookupError) return next(lookupError);
+
+    if (!resetRecord || resetRecord.used || new Date(resetRecord.expires_at) < new Date()) {
+      return res.status(400).json({
+        message: 'This password reset link is invalid or has expired. Please request a new one.',
+      });
+    }
+
+    // Hash new password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
+    // Update the user's password
     const { error: updateError } = await supabase
       .from('users')
       .update({ password_hash: passwordHash })
-      .eq('id', user.id);
+      .eq('id', resetRecord.user_id);
 
     if (updateError) return next(updateError);
+
+    // Mark the token as used (one-time use)
+    await supabase
+      .from('password_reset_tokens')
+      .update({ used: true })
+      .eq('id', resetRecord.id);
 
     return res.status(200).json({
       message: 'Password reset successfully. You can now sign in with your new password.',
@@ -413,6 +495,7 @@ module.exports = {
   registerUser,
   loginUser,
   forgotPassword,
+  resetPassword,
   getMe,
   updateProfile,
   getPublicProfiles,
@@ -421,5 +504,3 @@ module.exports = {
   adminUpdateUser,
   adminDeleteUser,
 };
-
-

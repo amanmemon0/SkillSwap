@@ -28,11 +28,16 @@ export default function Login({ initialForgot = false }: LoginProps) {
   const [authError, setAuthError] = useState('');
   const [resetSuccess, setResetSuccess] = useState('');
 
-  // Forgot password form state
+  // Forgot password — two-step flow
+  // Step 1: user enters email → we send token
+  // Step 2: user enters token + new password → we reset
+  const [forgotStep, setForgotStep] = useState<1 | 2>(1);
   const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotToken, setForgotToken] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [forgotError, setForgotError] = useState('');
+  const [forgotInfo, setForgotInfo] = useState('');
   const [forgotBusy, setForgotBusy] = useState(false);
 
   const {
@@ -56,37 +61,56 @@ export default function Login({ initialForgot = false }: LoginProps) {
     }
   };
 
-  const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+  // Step 1: request a reset token to be sent to email
+  const handleRequestReset = async (e: React.FormEvent) => {
     e.preventDefault();
     setForgotError('');
-    setResetSuccess('');
-
+    setForgotInfo('');
     const emailTrimmed = forgotEmail.trim();
     if (!emailTrimmed || !emailTrimmed.includes('@')) {
       setForgotError('Please enter a valid email address');
       return;
     }
+    setForgotBusy(true);
+    try {
+      const res = await api.requestPasswordReset({ email: emailTrimmed });
+      setForgotInfo(res.message || 'Check your email for a reset token.');
+      setForgotStep(2);
+    } catch (err: any) {
+      setForgotError(err.message || 'Unable to send reset email. Please try again.');
+    } finally {
+      setForgotBusy(false);
+    }
+  };
 
-    if (!newPassword || newPassword.length < 6) {
-      setForgotError('New password must be at least 6 characters long');
+  // Step 2: consume the token and set the new password
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setForgotError('');
+    if (!forgotToken.trim()) {
+      setForgotError('Please enter the token from your email');
       return;
     }
-
+    if (!newPassword || newPassword.length < 8) {
+      setForgotError('New password must be at least 8 characters long');
+      return;
+    }
     if (newPassword !== confirmPassword) {
       setForgotError('Passwords do not match');
       return;
     }
-
     setForgotBusy(true);
     try {
-      const res = await api.forgotPassword({ email: emailTrimmed, newPassword });
-      setResetSuccess(res.message || 'Password reset successfully! You can now sign in with your new password.');
-      setValue('email', emailTrimmed);
+      const res = await api.resetPassword({ token: forgotToken.trim(), newPassword });
+      setResetSuccess(res.message || 'Password reset successfully! You can now sign in.');
+      setValue('email', forgotEmail);
       setIsForgot(false);
+      setForgotStep(1);
+      setForgotToken('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      setForgotError(err.message || 'Unable to reset password. Please verify the email address.');
+      setForgotError(err.message || 'Invalid or expired token. Please request a new one.');
     } finally {
       setForgotBusy(false);
     }
@@ -202,6 +226,8 @@ export default function Login({ initialForgot = false }: LoginProps) {
             onClick={() => {
               setIsForgot(false);
               setForgotError('');
+              setForgotInfo('');
+              setForgotStep(1);
             }}
             className="mt-8 flex items-center gap-1.5 text-xs font-bold text-ink/60 hover:text-violet transition"
           >
@@ -213,87 +239,132 @@ export default function Login({ initialForgot = false }: LoginProps) {
             Reset your{' '}
             <span className="gradient-text">password.</span>
           </h2>
-          <p className="mt-3 text-sm text-ink/55">
-            Enter your account email and choose a new password to easily regain access.
-          </p>
 
-          <form onSubmit={handleForgotPasswordSubmit} className="mt-8 space-y-4">
-            <label className="block text-sm font-bold">
-              Account Email
-              <input
-                className="field mt-2"
-                type="email"
-                required
-                placeholder="name@example.com"
-                value={forgotEmail}
-                onChange={(e) => setForgotEmail(e.target.value)}
-              />
-            </label>
-
-            <div>
-              <label className="block text-sm font-bold">New Password</label>
-              <div className="relative mt-2">
-                <input
-                  className="field pr-10"
-                  type={showNew ? 'text' : 'password'}
-                  required
-                  placeholder="At least 6 characters"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  aria-label="Toggle password visibility"
-                  onClick={() => setShowNew(!showNew)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-violet transition"
-                >
-                  {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-bold">Confirm New Password</label>
-              <div className="relative mt-2">
-                <input
-                  className="field pr-10"
-                  type={showConfirm ? 'text' : 'password'}
-                  required
-                  placeholder="Repeat new password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-                <button
-                  type="button"
-                  aria-label="Toggle password visibility"
-                  onClick={() => setShowConfirm(!showConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-violet transition"
-                >
-                  {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
-                </button>
-              </div>
-            </div>
-
-            {forgotError && (
-              <p role="alert" className="rounded-xl bg-coral/10 border border-coral/20 p-3 text-xs font-bold text-coral">
-                {forgotError}
+          {forgotStep === 1 ? (
+            <>
+              <p className="mt-3 text-sm text-ink/55">
+                Enter your account email. We'll send you a one-time reset token.
               </p>
-            )}
+              <form onSubmit={handleRequestReset} className="mt-8 space-y-4">
+                <label className="block text-sm font-bold">
+                  Account Email
+                  <input
+                    className="field mt-2"
+                    type="email"
+                    required
+                    placeholder="name@example.com"
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                  />
+                </label>
 
-            <Button
-              type="submit"
-              disabled={forgotBusy}
-              className="w-full bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow hover:scale-[1.02] flex items-center justify-center gap-2"
-            >
-              {forgotBusy ? (
-                'Resetting password…'
-              ) : (
-                <>
-                  <KeyRound size={16} /> Reset Password
-                </>
+                {forgotError && (
+                  <p role="alert" className="rounded-xl bg-coral/10 border border-coral/20 p-3 text-xs font-bold text-coral">
+                    {forgotError}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={forgotBusy}
+                  className="w-full bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow hover:scale-[1.02] flex items-center justify-center gap-2"
+                >
+                  {forgotBusy ? 'Sending...' : <><KeyRound size={16} /> Send Reset Token</>}
+                </Button>
+              </form>
+            </>
+          ) : (
+            <>
+              <p className="mt-3 text-sm text-ink/55">
+                Check your email for the reset token, then enter it below with your new password.
+              </p>
+              {forgotInfo && (
+                <div role="status" className="mt-4 flex items-start gap-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3.5 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={16} className="mt-0.5 shrink-0" />
+                  <span>{forgotInfo}</span>
+                </div>
               )}
-            </Button>
-          </form>
+              <form onSubmit={handleResetPassword} className="mt-6 space-y-4">
+                <label className="block text-sm font-bold">
+                  Reset Token
+                  <input
+                    className="field mt-2 font-mono tracking-widest"
+                    type="text"
+                    required
+                    placeholder="Paste token from email"
+                    value={forgotToken}
+                    onChange={(e) => setForgotToken(e.target.value)}
+                  />
+                </label>
+
+                <div>
+                  <label className="block text-sm font-bold">New Password</label>
+                  <div className="relative mt-2">
+                    <input
+                      className="field pr-10"
+                      type={showNew ? 'text' : 'password'}
+                      required
+                      placeholder="At least 8 characters"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Toggle password visibility"
+                      onClick={() => setShowNew(!showNew)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-violet transition"
+                    >
+                      {showNew ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold">Confirm New Password</label>
+                  <div className="relative mt-2">
+                    <input
+                      className="field pr-10"
+                      type={showConfirm ? 'text' : 'password'}
+                      required
+                      placeholder="Repeat new password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      aria-label="Toggle password visibility"
+                      onClick={() => setShowConfirm(!showConfirm)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-ink/40 hover:text-violet transition"
+                    >
+                      {showConfirm ? <EyeOff size={17} /> : <Eye size={17} />}
+                    </button>
+                  </div>
+                </div>
+
+                {forgotError && (
+                  <p role="alert" className="rounded-xl bg-coral/10 border border-coral/20 p-3 text-xs font-bold text-coral">
+                    {forgotError}
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={forgotBusy}
+                  className="w-full bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow hover:scale-[1.02] flex items-center justify-center gap-2"
+                >
+                  {forgotBusy ? 'Resetting password…' : <><KeyRound size={16} /> Reset Password</>}
+                </Button>
+
+                <button
+                  type="button"
+                  onClick={() => { setForgotStep(1); setForgotError(''); setForgotToken(''); }}
+                  className="w-full text-xs font-semibold text-ink/50 hover:text-violet transition"
+                >
+                  Didn't receive a token? Send again
+                </button>
+              </form>
+            </>
+          )}
 
           <p className="mt-7 text-center text-sm text-ink/55">
             Remembered your password?{' '}
@@ -302,6 +373,7 @@ export default function Login({ initialForgot = false }: LoginProps) {
               onClick={() => {
                 setIsForgot(false);
                 setForgotError('');
+                setForgotStep(1);
               }}
               className="font-bold text-violet hover:text-electric transition"
             >

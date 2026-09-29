@@ -16,6 +16,7 @@ import { ScheduleLectureModal } from '../components/ui/ScheduleLectureModal';
 import { ScheduleExamModal } from '../components/ui/ScheduleExamModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
+import LectureManager from '../components/LectureManager';
 import { useLearningStore } from '../data/learningMockData';
 import { api } from '../utils/api';
 
@@ -182,60 +183,11 @@ export default function TeachingCourseDetail() {
 
           {/* Lectures Tab */}
           {activeTab === 'lectures' && (
-            <div className="space-y-2">
-              {/* ── NEW: Schedule button ── */}
-              <div className="flex justify-end mb-3">
-                <Button
-                  onClick={() => setShowScheduleLecture(true)}
-                  className="bg-gradient-to-r from-violet to-electric text-white text-xs py-2"
-                >
-                  <Plus size={14} /> Schedule Lecture
-                </Button>
-              </div>
-
-              {lectures.length === 0 && (
-                <div className="rounded-3xl bg-white p-12 text-center text-ink/40 shadow-card border border-ink/5">
-                  <BookOpen size={32} className="mx-auto mb-3" />
-                  <p className="font-bold">No lectures yet</p>
-                  <p className="mt-1 text-xs">Click "Schedule Lecture" to create your first lecture.</p>
-                </div>
-              )}
-
-              {lectures.map((lecture, i) => {
-                const attendedCount = enrollments.filter(e => e.lecturesCompleted >= lecture.order).length;
-                return (
-                  <div key={lecture.id} className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-card border border-ink/5">
-                    <div className="shrink-0">
-                      {lecture.status === 'completed' ? (
-                        <CheckCircle2 size={20} className="text-emerald-500" />
-                      ) : (
-                        <Clock size={20} className="text-ink/25" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold">Lecture {lecture.order}: {lecture.title}</p>
-                      <p className="text-xs text-ink/40">{lecture.duration} · {attendedCount}/{enrollments.length} attended</p>
-                      {/* Scheduled time */}
-                      {lecture.scheduledAt && (
-                        <p className="mt-0.5 flex items-center gap-1 text-[10px] text-violet font-bold">
-                          <CalendarClock size={10} />
-                          {new Date(lecture.scheduledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      )}
-                    </div>
-                    <StatusBadge status={lecture.status} />
-                    {lecture.status !== 'completed' && (
-                      <Button
-                        onClick={() => nav(`/learning/${course.id}/lecture/${lecture.id}`)}
-                        className="bg-violet/10 text-violet hover:bg-violet hover:text-white text-xs py-1.5"
-                      >
-                        <Play size={12} /> Start
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <LectureManager
+              courseId={course.id}
+              lectures={lectures}
+              onChange={store.refresh}
+            />
           )}
 
           {/* Exams Tab */}

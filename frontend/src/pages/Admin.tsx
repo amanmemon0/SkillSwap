@@ -3,6 +3,7 @@ import {
   AlertCircle,
   Award,
   Ban,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -34,11 +35,12 @@ import { Link, useNavigate } from "react-router-dom";
 import { Avatar, Button } from "../components/ui/Primitives";
 import { api } from "../utils/api";
 import { SkillApprovalQueue } from "../features/skill-management/SkillManagement";
+import AdminCourseModeration from "../components/AdminCourseModeration";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Status = "Active" | "Pending" | "Suspended" | "Banned";
 type Role = "User" | "Admin";
-type AdminTab = "dashboard" | "users" | "database" | "certificates";
+type AdminTab = "dashboard" | "users" | "database" | "certificates" | "courses";
 
 type User = {
   id: string | number;
@@ -910,6 +912,7 @@ export default function Admin() {
   const navItems: { key: AdminTab; icon: React.ReactNode; label: string }[] = [
     { key: "dashboard", icon: <LayoutDashboard size={18} />, label: "Dashboard" },
     { key: "users", icon: <Users size={18} />, label: "User Management" },
+    { key: "courses", icon: <BookOpen size={18} />, label: "Course Moderation" },
     { key: "database", icon: <Database size={18} />, label: "Database Tables" },
     { key: "certificates", icon: <Award size={18} />, label: "Certificates" },
   ];
@@ -1261,6 +1264,13 @@ export default function Admin() {
                 </p>
               </div>
               <DatabaseTableViewer />
+            </div>
+          )}
+
+          {/* ── Course Moderation ───────────────────────────────────────── */}
+          {adminTab === "courses" && (
+            <div>
+              <AdminCourseModeration />
             </div>
           )}
 

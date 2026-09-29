@@ -81,8 +81,23 @@ export const api = {
     return data;
   },
 
-  forgotPassword: async (payload: { email: string; newPassword: string }): Promise<{ message: string }> => {
+  /**
+   * Step 1: Send reset-link email. Only requires { email }.
+   * Always returns a generic message regardless of whether the email exists.
+   */
+  requestPasswordReset: async (payload: { email: string }): Promise<{ message: string }> => {
     return request<{ message: string }>('/api/auth/forgot-password', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /**
+   * Step 2: Consume the token and set a new password.
+   * Requires { token, newPassword }.
+   */
+  resetPassword: async (payload: { token: string; newPassword: string }): Promise<{ message: string }> => {
+    return request<{ message: string }>('/api/auth/reset-password', {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -163,16 +178,37 @@ export const api = {
   getSkills: () => request<any[]>('/api/skills'),
   getProfiles: (search?: string) => request<any[]>(`/api/auth/profiles${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   adminGetTable: (table: string, page = 1, pageSize = 25) => request<{ table: string; rows: Record<string, unknown>[]; total: number; page: number; pageSize: number }>(`/api/auth/admin/tables/${encodeURIComponent(table)}?page=${page}&pageSize=${pageSize}`),
+
+  // ── Courses ───────────────────────────────────────────────────────────────
   listCourses: () => request<any[]>('/api/courses'),
   getCourse: (id: string) => request<any>(`/api/courses/${id}`),
-  createCourse: (payload: { title: string; skillName: string; description?: string; category?: string; status?: string }) => request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
+  /**
+   * Create a new course. Status is forced to 'pending_review' by the backend
+   * regardless of what the client sends.
+   */
+  createCourse: (payload: { skillName: string; title: string; description?: string; creditCost?: number; category?: string }) =>
+    request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
   getMyLearning: () => request<any[]>('/api/courses/mine/learning'),
   getMyTeaching: () => request<any[]>('/api/courses/mine/teaching'),
-  createCourse: (payload: { skillName: string; title: string; description: string; creditCost: number; status?: 'draft' | 'published' }) =>
-    request<any>('/api/courses', { method: 'POST', body: JSON.stringify(payload) }),
   getCourseEnrollments: (courseId: string) => request<any[]>(`/api/courses/${courseId}/enrollments`),
+
+  // ── Admin moderation ──────────────────────────────────────────────────────
+  adminListPendingCourses: () => request<any[]>('/api/courses/admin/pending'),
+  adminModerateCourse: (courseId: string, decision: 'approved' | 'rejected', note?: string) =>
+    request<any>(`/api/courses/${courseId}/moderate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ decision, note }),
+    }),
+
+  // ── Lectures ──────────────────────────────────────────────────────────────
   getLectures: (courseId: string) => request<any[]>(`/api/courses/${courseId}/lectures`),
-  createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string; order: number }) => request<any>(`/api/courses/${courseId}/lectures`, { method: 'POST', body: JSON.stringify(payload) }),
+  createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string; order: number }) =>
+    request<any>(`/api/courses/${courseId}/lectures`, { method: 'POST', body: JSON.stringify(payload) }),
+  updateLecture: (lectureId: string, payload: Partial<{ title: string; description: string; order: number; durationMinutes: number; scheduledAt: string; status: string }>) =>
+    request<any>(`/api/courses/lectures/${lectureId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteLecture: (lectureId: string) =>
+    request<any>(`/api/courses/lectures/${lectureId}`, { method: 'DELETE' }),
+
   enrollCourse: (courseId: string) => request<any>(`/api/courses/${courseId}/enroll`, { method: 'POST' }),
   markAttendance: (lectureId: string) => request<any>(`/api/courses/lectures/${lectureId}/attendance`, { method: 'PUT', body: JSON.stringify({ status: 'present', minutesAttended: 45 }) }),
   requestExam: (courseId: string) => request<any>(`/api/courses/${courseId}/exam-request`, { method: 'POST' }),
