@@ -6,5 +6,9 @@ export default defineConfig({
     rollupOptions: {
       external: ['jotai', 'jotai/utils'],
     },
+    target: 'es2022',
+  },
+  optimizeDeps: {
+    exclude: ['jotai', 'jotai/utils'],
   },
 })
