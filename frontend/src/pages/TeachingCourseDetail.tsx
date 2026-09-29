@@ -5,16 +5,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import {
   ArrowLeft, Users, BookOpen, FileText, Award, CheckCircle2, Clock,
-  Play, XCircle, ChevronRight,
+  Play, XCircle, Plus, CalendarClock, Loader2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/ui/StatusBadge';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
+import { ScheduleLectureModal } from '../components/ui/ScheduleLectureModal';
+import { ScheduleExamModal } from '../components/ui/ScheduleExamModal';
 import { useToast, ToastContainer } from '../components/ui/Toast';
 import Navbar from '../components/Navbar';
+import LectureManager from '../components/LectureManager';
 import { useLearningStore } from '../data/learningMockData';
+import { api } from '../utils/api';
 
 type Tab = 'learners' | 'lectures' | 'exams' | 'certificates';
 
@@ -25,11 +29,30 @@ export default function TeachingCourseDetail() {
   const { toasts, show, dismiss } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('learners');
   const [confirmAction, setConfirmAction] = useState<{ type: string; id: string; name: string } | null>(null);
+  const [showScheduleLecture, setShowScheduleLecture] = useState(false);
+  const [showScheduleExam, setShowScheduleExam] = useState(false);
 
   const course = store.courses.find(c => c.id === courseId);
   const enrollments = course ? store.getCourseEnrollments(course.id) : [];
   const lectures = course ? store.getCourseLectures(course.id) : [];
   const certRequests = course ? store.getCertificateRequests({ teacherId: store.currentUserId }).filter(r => r.courseId === course.id) : [];
+
+  // localStorage-based exam scheduling (no backend column yet)
+  const getExamScheduledAt = (id: string) => localStorage.getItem(`ss_exam_schedule_${id}`);
+  const setExamScheduledAt = (id: string, iso: string) => localStorage.setItem(`ss_exam_schedule_${id}`, iso);
+
+  // Still loading — wait for currentUserId to be populated
+  if (store.loading || !store.currentUserId) {
+    return (
+      <main className="min-h-screen bg-surface">
+        <Navbar variant="auth" />
+        <div className="flex items-center justify-center py-32 gap-3 text-ink/50">
+          <Loader2 size={20} className="animate-spin" />
+          <p className="text-sm font-medium">Loading course...</p>
+        </div>
+      </main>
+    );
+  }
 
   if (!course || course.teacherId !== store.currentUserId) {
     return (
@@ -49,28 +72,23 @@ export default function TeachingCourseDetail() {
     { key: 'certificates', label: 'Certificates', icon: Award, count: certRequests.filter(r => r.tutorApproval === 'pending').length },
   ];
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!confirmAction) return;
     const { type, id, name } = confirmAction;
 
-    if (type === 'schedule-exam') {
-      const enrollment = enrollments.find(e => e.learnerId === id);
-      if (enrollment) {
-        store.scheduleExam(course.id, id);
+    try {
+      if (type === 'schedule-exam') {
+        await store.scheduleExam(course.id, id);
         show(`Exam scheduled for ${name}`, 'success');
+      } else if (type === 'approve-cert') {
+        await store.approveCertificateTutor(id);
+        show(`Certificate approved for ${name}`, 'success');
+      } else if (type === 'reject-cert') {
+        await store.rejectCertificateTutor(id);
+        show(`Certificate rejected for ${name}`, 'warning');
       }
-    } else if (type === 'pass-exam') {
-      store.markExamResult(course.id, id, true);
-      show(`${name} marked as passed!`, 'success');
-    } else if (type === 'fail-exam') {
-      store.markExamResult(course.id, id, false);
-      show(`${name} marked as failed`, 'warning');
-    } else if (type === 'approve-cert') {
-      store.approveCertificateTutor(id);
-      show(`Certificate approved for ${name}`, 'success');
-    } else if (type === 'reject-cert') {
-      store.rejectCertificateTutor(id);
-      show(`Certificate rejected for ${name}`, 'warning');
+    } catch (err: any) {
+      show(err.message || 'Action failed', 'error');
     }
 
     setConfirmAction(null);
@@ -165,40 +183,48 @@ export default function TeachingCourseDetail() {
 
           {/* Lectures Tab */}
           {activeTab === 'lectures' && (
-            <div className="space-y-2">
-              {lectures.map((lecture, i) => {
-                const attendedCount = enrollments.filter(e => e.lecturesCompleted >= lecture.order).length;
-                return (
-                  <div key={lecture.id} className="flex items-center gap-4 rounded-2xl bg-white p-4 shadow-card border border-ink/5">
-                    <div className="shrink-0">
-                      {lecture.status === 'completed' ? (
-                        <CheckCircle2 size={20} className="text-emerald-500" />
-                      ) : (
-                        <Clock size={20} className="text-ink/25" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-bold">Lecture {lecture.order}: {lecture.title}</p>
-                      <p className="text-xs text-ink/40">{lecture.duration} · {attendedCount}/{enrollments.length} attended</p>
-                    </div>
-                    <StatusBadge status={lecture.status} />
-                    {lecture.status !== 'completed' && (
-                      <Button
-                        onClick={() => nav(`/learning/${course.id}/lecture/${lecture.id}`)}
-                        className="bg-violet/10 text-violet hover:bg-violet hover:text-white text-xs py-1.5"
-                      >
-                        <Play size={12} /> Start
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+            <LectureManager
+              courseId={course.id}
+              lectures={lectures}
+              onChange={store.refresh}
+            />
           )}
 
           {/* Exams Tab */}
           {activeTab === 'exams' && (
             <div className="space-y-3">
+              {/* ── NEW: Schedule Exam Date button ── */}
+              <div className="flex justify-end mb-3">
+                <Button
+                  onClick={() => setShowScheduleExam(true)}
+                  className="bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs py-2"
+                >
+                  <CalendarClock size={14} /> Schedule Exam Date
+                </Button>
+              </div>
+
+              {/* Show currently scheduled exam date if set */}
+              {(() => {
+                const scheduled = getExamScheduledAt(course.id);
+                return scheduled ? (
+                  <div className="flex items-center gap-3 rounded-2xl bg-amber-50 border border-amber-100 px-5 py-3">
+                    <CalendarClock size={18} className="text-amber-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-bold text-amber-800">Exam Scheduled</p>
+                      <p className="text-xs text-amber-700">
+                        {new Date(scheduled).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setShowScheduleExam(true)}
+                      className="ml-auto text-xs font-bold text-amber-600 hover:text-amber-800 transition"
+                    >
+                      Change
+                    </button>
+                  </div>
+                ) : null;
+              })()}
+
               {enrollments.filter(e => ['requested', 'scheduled', 'passed', 'failed', 'submitted'].includes(e.examStatus)).length === 0 ? (
                 <div className="rounded-3xl bg-white p-12 text-center text-ink/40 shadow-card border border-ink/5">
                   <FileText size={32} className="mx-auto mb-3" />
@@ -348,6 +374,36 @@ export default function TeachingCourseDetail() {
           variant={confirmAction.type.includes('reject') || confirmAction.type.includes('fail') ? 'danger' : 'primary'}
           onConfirm={handleConfirm}
           onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
+      {/* Schedule Lecture Modal */}
+      {showScheduleLecture && (
+        <ScheduleLectureModal
+          courseId={course.id}
+          onClose={() => setShowScheduleLecture(false)}
+          onSave={async (data) => {
+            const nextOrder = lectures.length + 1;
+            await api.createLecture(course.id, { ...data, order: nextOrder });
+            await store.refresh();
+            show(`Lecture "${data.title}" scheduled!`, 'success');
+            setShowScheduleLecture(false);
+          }}
+        />
+      )}
+
+      {/* Schedule Exam Modal */}
+      {showScheduleExam && (
+        <ScheduleExamModal
+          courseId={course.id}
+          courseName={course.skillName}
+          existingScheduledAt={getExamScheduledAt(course.id)}
+          onClose={() => setShowScheduleExam(false)}
+          onSave={async (scheduledAt) => {
+            setExamScheduledAt(course.id, scheduledAt);
+            show(`Exam date saved! Learners will see it on their dashboard.`, 'success');
+            setShowScheduleExam(false);
+          }}
         />
       )}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />

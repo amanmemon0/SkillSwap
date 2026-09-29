@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { registerSchema, loginSchema, forgotPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
+const { registerSchema, loginSchema, requestPasswordResetSchema, resetPasswordSchema, profileUpdateSchema, adminUserUpdateSchema } = require('../utils/authValidation');
 const { validate } = require('../middleware/validate');
 const jwt = require('jsonwebtoken');
 
@@ -118,14 +118,27 @@ test('login schema accepts valid payload', () => {
   assert.deepEqual(result.data, { email: 'user@example.com', password: 'secret123' });
 });
 
-test('forgot password schema validates email and minimum password length', () => {
-  const valid = forgotPasswordSchema.safeParse({ email: 'test@example.com', newPassword: 'NewPassword123' });
+test('requestPasswordResetSchema validates email only (Step 1)', () => {
+  const valid = requestPasswordResetSchema.safeParse({ email: 'test@example.com' });
   assert.equal(valid.success, true);
 
-  const invalidEmail = forgotPasswordSchema.safeParse({ email: 'invalid-email', newPassword: 'NewPassword123' });
+  const invalidEmail = requestPasswordResetSchema.safeParse({ email: 'invalid-email' });
   assert.equal(invalidEmail.success, false);
 
-  const shortPassword = forgotPasswordSchema.safeParse({ email: 'test@example.com', newPassword: '123' });
+  // Must NOT accept newPassword in step 1 — that's the old insecure shape
+  // (extra fields are stripped by Zod by default, so this still succeeds)
+  const withExtraFields = requestPasswordResetSchema.safeParse({ email: 'test@example.com', newPassword: 'secret' });
+  assert.equal(withExtraFields.success, true);
+});
+
+test('resetPasswordSchema validates token + minimum password length (Step 2)', () => {
+  const valid = resetPasswordSchema.safeParse({ token: 'abc123', newPassword: 'NewPassword1' });
+  assert.equal(valid.success, true);
+
+  const missingToken = resetPasswordSchema.safeParse({ newPassword: 'NewPassword1' });
+  assert.equal(missingToken.success, false);
+
+  const shortPassword = resetPasswordSchema.safeParse({ token: 'abc123', newPassword: '123' });
   assert.equal(shortPassword.success, false);
 });
 

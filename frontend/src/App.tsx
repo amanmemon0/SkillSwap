@@ -27,6 +27,7 @@ import CertificateVerify from './pages/CertificateVerify';
 
 import NotFound from './pages/NotFound';
 import PublicUserProfile from './pages/PublicUserProfile';
+import CourseCatalog from './pages/CourseCatalog';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
       <Route path="/explore" element={<ExploreSkills />} />
       <Route path="/match" element={<SkillMatch />} />
       <Route path="/exchange-request" element={<ExchangeRequest />} />
+      <Route path="/courses" element={<CourseCatalog />} />
       <Route path="/certificates/verify" element={<CertificateVerify />} />
       <Route path="/users/:id" element={<PublicUserProfile />} />
 

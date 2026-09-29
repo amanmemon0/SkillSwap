@@ -148,3 +148,17 @@ export interface Participant {
   isMuted: boolean;
   isCameraOn: boolean;
 }
+
+/* ─── In-App Notification ─── */
+export interface AppNotification {
+  id: string;
+  userId: string;
+  type: 'lecture' | 'exam';
+  title: string;
+  message: string;
+  courseId: string;
+  lectureId?: string;
+  scheduledAt: string; // ISO datetime
+  read: boolean;
+  createdAt: string;
+}

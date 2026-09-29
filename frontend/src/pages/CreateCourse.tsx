@@ -36,7 +36,8 @@ export default function CreateCourse() {
         title: name.trim(),
         description: description.trim(),
         creditCost: credits,
-        status: 'published',
+        // Note: status is NOT sent — the backend forces 'pending_review' on creation.
+        // An admin must approve it before it appears in the public catalog.
       });
       nav(`/teaching/${course.id}`);
     } catch (err) {
@@ -57,7 +58,7 @@ export default function CreateCourse() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-7">
           <p className="eyebrow">Teach</p>
           <h1 className="mt-2 font-display text-3xl font-bold sm:text-4xl">Create a course</h1>
-          <p className="mt-2 text-ink/55">Share your expertise and set the credit cost for learners.</p>
+          <p className="mt-2 text-ink/55">Share your expertise and set the credit cost for learners. Your course will be reviewed by an admin before it appears in the public catalog.</p>
         </motion.div>
 
         <motion.form
@@ -91,7 +92,7 @@ export default function CreateCourse() {
           <div className="mt-8 flex flex-col-reverse gap-3 border-t border-ink/5 pt-6 sm:flex-row sm:justify-end">
             <Link to="/teaching"><Button type="button" className="w-full bg-ink/5 text-ink hover:bg-ink/10 sm:w-auto">Cancel</Button></Link>
             <Button type="submit" disabled={saving} className="w-full bg-gradient-to-r from-violet to-electric text-white disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto">
-              {saving ? <><LoaderCircle size={16} className="animate-spin" /> Creating...</> : <><Send size={16} /> Publish course</>}
+              {saving ? <><LoaderCircle size={16} className="animate-spin" /> Submitting...</> : <><Send size={16} /> Submit for review</>}
             </Button>
           </div>
         </motion.form>

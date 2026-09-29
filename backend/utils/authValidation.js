@@ -39,9 +39,15 @@ const adminUserUpdateSchema = z.object({
   role: z.enum(['admin', 'user', 'Admin', 'User']).optional(),
 }).refine((value) => Object.keys(value).length > 0, 'Provide a status or role to update');
 
-const forgotPasswordSchema = z.object({
+// Step 1: user provides their email → we send a reset link/token
+const requestPasswordResetSchema = z.object({
   email: z.string().trim().email('Please provide a valid email address'),
-  newPassword: z.string().min(6, 'Password must be at least 6 characters long'),
+});
+
+// Step 2: user provides the token they received + their new password
+const resetPasswordSchema = z.object({
+  token: z.string().min(1, 'Reset token is required'),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters long'),
 });
 
 module.exports = {
@@ -49,5 +55,6 @@ module.exports = {
   loginSchema,
   profileUpdateSchema,
   adminUserUpdateSchema,
-  forgotPasswordSchema,
+  requestPasswordResetSchema,
+  resetPasswordSchema,
 };

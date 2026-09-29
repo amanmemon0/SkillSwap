@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { Bell, LogOut, MapPin, Menu, Sparkles, UserRound, X } from 'lucide-react';
 import { api } from '../utils/api';
 import { Avatar, Button } from './ui/Primitives';
+import NotificationBell from './NotificationBell';
 
 
 
@@ -18,6 +19,7 @@ const publicLinks: NavLinkItem[] = [
 /* Authenticated nav links */
 const authLinks: NavLinkItem[] = [
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/courses', label: 'Courses' },
   { to: '/learning', label: 'My Learning' },
   { to: '/teaching', label: 'My Teaching' },
   { to: '/explore', label: 'Explore' },
@@ -38,7 +40,6 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    let channel: any;
 
     const loadData = async () => {
       try {
@@ -59,53 +60,31 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
           time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           read: n.read
         })));
-
-        // Subscribe to live realtime notifications
-        const { supabase } = await import('../auth/supabaseClient');
-        channel = supabase.channel(`notifications:profile:${user._id}`);
-        channel
-          .on(
-            'postgres_changes',
-            {
-              event: '*',
-              schema: 'public',
-              table: 'notifications',
-              filter: `profile_id=eq.${user._id}`
-            },
-            (payload: any) => {
-              if (payload.eventType === 'INSERT') {
-                const newNotif = {
-                  id: payload.new.id,
-                  title: payload.new.title || 'Notification',
-                  detail: payload.new.detail || '',
-                  time: 'Just now',
-                  read: payload.new.read
-                };
-                setNotifications(prev => [newNotif, ...prev]);
-              } else if (payload.eventType === 'UPDATE') {
-                setNotifications(prev => prev.map(n => n.id === payload.new.id ? {
-                  ...n,
-                  read: payload.new.read
-                } : n));
-              } else if (payload.eventType === 'DELETE') {
-                setNotifications(prev => prev.filter(n => n.id !== payload.old.id));
-              }
-            }
-          )
-          .subscribe();
       } catch (err) {
         console.error('Failed to get navbar data:', err);
       }
     };
+
+    // Initial load
     loadData();
 
-    return () => {
-      if (channel) {
-        import('../auth/supabaseClient').then(({ supabase }) => {
-          supabase.removeChannel(channel);
-        });
-      }
-    };
+    // Poll for new notifications every 30 seconds.
+    // NOTE: True Realtime push requires aligning this app's custom JWT auth with
+    // Supabase's auth.uid() used by RLS policies — that is an auth-architecture
+    // change out of scope for this patch. Polling is the correct interim fix.
+    const poll = setInterval(() => {
+      api.getNotifications().then(notifs => {
+        setNotifications(notifs.map(n => ({
+          id: n.id,
+          title: n.title || 'Notification',
+          detail: n.detail || n.message || '',
+          time: new Date(n.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          read: n.read
+        })));
+      }).catch(() => {/* silently ignore polling errors */});
+    }, 30_000);
+
+    return () => clearInterval(poll);
   }, [isAuthenticated]);
 
   const logout = () => {
@@ -182,6 +161,9 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
         <div className="flex items-center gap-2">
           {isAuthenticated ? (
             <>
+              {/* Course/Exam Notifications (scheduling) */}
+              <NotificationBell />
+
               {/* Notifications */}
               <button
                 type="button"
