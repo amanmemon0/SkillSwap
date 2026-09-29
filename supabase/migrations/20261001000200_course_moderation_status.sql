@@ -6,21 +6,8 @@
 --   pending_review → archived (admin rejects)
 --   published → archived (admin or teacher archives)
 
--- Drop the existing check constraint (name may differ — find and drop by convention)
-DO $$
-DECLARE
-  v_constraint text;
-BEGIN
-  SELECT constraint_name INTO v_constraint
-  FROM information_schema.check_constraints
-  WHERE constraint_schema = 'public'
-    AND constraint_name LIKE '%courses%status%';
-
-  IF v_constraint IS NOT NULL THEN
-    EXECUTE format('ALTER TABLE courses DROP CONSTRAINT %I', v_constraint);
-  END IF;
-END;
-$$;
+-- Drop the existing check constraint directly using its exact name from the error
+ALTER TABLE courses DROP CONSTRAINT IF EXISTS courses_status_check;
 
 -- Re-add constraint with the full set of valid statuses
 ALTER TABLE courses
