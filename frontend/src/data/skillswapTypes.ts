@@ -3,7 +3,7 @@
    ═══════════════════════════════════════════════════════════ */
 
 /* ─── Lecture Status ─── */
-export type LectureStatus = 'upcoming' | 'in-progress' | 'completed' | 'missed';
+export type LectureStatus = 'upcoming' | 'in-progress' | 'live' | 'completed' | 'missed';
 
 /* ─── Exam Status ─── */
 export type ExamStatus = 'locked' | 'eligible' | 'requested' | 'scheduled' | 'in-progress' | 'submitted' | 'passed' | 'failed';

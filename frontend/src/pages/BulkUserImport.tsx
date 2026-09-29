@@ -3,6 +3,7 @@ import { ArrowLeft, Check, FileSpreadsheet, Upload, X } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "../components/ui/Primitives";
+import { api } from "../utils/api";
 
 type Row = {
   row: number;
@@ -66,7 +67,6 @@ export default function BulkUserImport() {
   const valid = rows.filter((row) => row.valid);
   const commitImport = async () => {
     try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       for (const row of valid) {
         const payload = {
           name: row.name,
@@ -85,13 +85,7 @@ export default function BulkUserImport() {
           learningMode: "Both"
         };
 
-        await fetch(`${API_URL}/api/auth/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(payload)
-        });
+        await api.register(payload);
       }
       setComplete(true);
       nav("/admin");

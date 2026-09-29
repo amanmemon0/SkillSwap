@@ -45,8 +45,8 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       ...options,
       headers,
     });
-  } catch {
-    throw new Error('Unable to connect to the SkillSwap API. Make sure the backend is running on port 5000.');
+  } catch (error: any) {
+    throw new Error(`Can't reach the SkillSwap API (${API_URL}) — check your connection or backend status. (Error: ${error?.message || 'Network request failed'})`);
   }
 
   const data = await response.json();
@@ -178,6 +178,18 @@ export const api = {
   getSkills: () => request<any[]>('/api/skills'),
   getProfiles: (search?: string) => request<any[]>(`/api/auth/profiles${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   adminGetTable: (table: string, page = 1, pageSize = 25) => request<{ table: string; rows: Record<string, unknown>[]; total: number; page: number; pageSize: number }>(`/api/auth/admin/tables/${encodeURIComponent(table)}?page=${page}&pageSize=${pageSize}`),
+  adminGetOverviewMetrics: () => request<{
+    totalUsers: number;
+    activeCourses: number;
+    pendingCourses: number;
+    totalExchanges: number;
+    recentActivity: {
+      newEnrollments30d: number;
+      newCourses30d: number;
+      newExchanges30d: number;
+    };
+  }>('/api/auth/admin/analytics/overview'),
+  adminGetRegistrationAnalytics: (days = 30) => request<{ date: string; count: number }[]>(`/api/auth/admin/analytics/registrations?days=${days}`),
 
   // ── Courses ───────────────────────────────────────────────────────────────
   listCourses: () => request<any[]>('/api/courses'),
@@ -202,9 +214,9 @@ export const api = {
 
   // ── Lectures ──────────────────────────────────────────────────────────────
   getLectures: (courseId: string) => request<any[]>(`/api/courses/${courseId}/lectures`),
-  createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string; order: number }) =>
+  createLecture: (courseId: string, payload: { title: string; description?: string; durationMinutes?: number; scheduledAt?: string | null; order: number }) =>
     request<any>(`/api/courses/${courseId}/lectures`, { method: 'POST', body: JSON.stringify(payload) }),
-  updateLecture: (lectureId: string, payload: Partial<{ title: string; description: string; order: number; durationMinutes: number; scheduledAt: string; status: string }>) =>
+  updateLecture: (lectureId: string, payload: Partial<{ title: string; description: string; order: number; durationMinutes: number; scheduledAt: string | null; status: string }>) =>
     request<any>(`/api/courses/lectures/${lectureId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteLecture: (lectureId: string) =>
     request<any>(`/api/courses/lectures/${lectureId}`, { method: 'DELETE' }),

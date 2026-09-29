@@ -42,6 +42,7 @@ export default function App() {
       <Route path="/exchange-request" element={<ExchangeRequest />} />
       <Route path="/courses" element={<CourseCatalog />} />
       <Route path="/certificates/verify" element={<CertificateVerify />} />
+      <Route path="/certificates/:certificateId" element={<CertificateView />} />
       <Route path="/users/:id" element={<PublicUserProfile />} />
 
       {/* Admin Routes */}
@@ -64,10 +65,10 @@ export default function App() {
       <Route path="/teaching" element={<ProtectedRoute role="user"><MyTeaching /></ProtectedRoute>} />
       <Route path="/teaching/create" element={<ProtectedRoute role="user"><CreateCourse /></ProtectedRoute>} />
       <Route path="/teaching/:courseId" element={<ProtectedRoute role="user"><TeachingCourseDetail /></ProtectedRoute>} />
+      <Route path="/teaching/:courseId/lecture/:lectureId" element={<ProtectedRoute role="user"><LiveLecture /></ProtectedRoute>} />
 
       {/* Certificate Routes */}
       <Route path="/certificates" element={<ProtectedRoute role="user"><CertificatePage /></ProtectedRoute>} />
-      <Route path="/certificates/:certificateId" element={<ProtectedRoute role="user"><CertificateView /></ProtectedRoute>} />
 
       {/* Fallback */}
       <Route path="*" element={<NotFound />} />

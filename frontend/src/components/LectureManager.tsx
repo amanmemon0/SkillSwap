@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { BookOpen, Check, Edit3, Loader2, Plus, Trash2, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { BookOpen, Check, CheckCircle2, Edit3, Loader2, Play, Plus, Radio, Trash2, Video, X } from 'lucide-react';
 import { Button } from './ui/Primitives';
 import { useToast, ToastContainer } from './ui/Toast';
 import { api } from '../utils/api';
@@ -36,12 +37,56 @@ const EMPTY_FORM: LectureFormState = {
 };
 
 export default function LectureManager({ courseId, lectures, onChange }: LectureManagerProps) {
+  const nav = useNavigate();
   const { toasts, show, dismiss } = useToast();
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<LectureFormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [startingId, setStartingId] = useState<string | null>(null);
+
+  const handleStartLecture = async (lecture: Lecture) => {
+    setStartingId(lecture.id);
+    try {
+      if (lecture.status !== 'live' && lecture.status !== 'in-progress') {
+        await api.updateLecture(lecture.id, { status: 'live' });
+        await onChange();
+      }
+      nav(`/teaching/${courseId}/lecture/${lecture.id}`);
+    } catch (err: any) {
+      show(err.message || 'Starting lecture room...', 'info');
+      nav(`/teaching/${courseId}/lecture/${lecture.id}`);
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const handleJoinLecture = (lecture: Lecture) => {
+    nav(`/teaching/${courseId}/lecture/${lecture.id}`);
+  };
+
+  const handleEndLecture = async (lecture: Lecture) => {
+    try {
+      await api.updateLecture(lecture.id, { status: 'completed' });
+      await onChange();
+      show(`Lecture "${lecture.title}" marked as done and completed.`, 'success');
+    } catch (err: any) {
+      show(err.message || 'Failed to complete lecture', 'error');
+    }
+  };
+
+  const toDatetimeLocal = (iso?: string | null) => {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return '';
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    } catch {
+      return '';
+    }
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -53,9 +98,9 @@ export default function LectureManager({ courseId, lectures, onChange }: Lecture
     setEditingId(lecture.id);
     setForm({
       title: lecture.title,
-      description: lecture.description,
+      description: lecture.description || '',
       durationMinutes: lecture.duration.replace(/\D/g, '') || '60',
-      scheduledAt: lecture.scheduledAt || '',
+      scheduledAt: toDatetimeLocal(lecture.scheduledAt),
     });
     setShowForm(true);
   };
@@ -72,11 +117,19 @@ export default function LectureManager({ courseId, lectures, onChange }: Lecture
 
     setBusy(true);
     try {
+      let isoDate: string | null = null;
+      if (form.scheduledAt && form.scheduledAt.trim()) {
+        const parsed = new Date(form.scheduledAt);
+        if (!isNaN(parsed.getTime())) {
+          isoDate = parsed.toISOString();
+        }
+      }
+
       const payload = {
         title: form.title.trim(),
-        description: form.description.trim() || undefined,
+        description: form.description.trim() || '',
         durationMinutes: Number(form.durationMinutes) || 0,
-        scheduledAt: form.scheduledAt || undefined,
+        scheduledAt: isoDate,
         order: editingId
           ? (lectures.find(l => l.id === editingId)?.order ?? lectures.length + 1)
           : lectures.length + 1,
@@ -248,22 +301,78 @@ export default function LectureManager({ courseId, lectures, onChange }: Lecture
             </p>
           </div>
 
-          <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${
+          <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-extrabold flex items-center gap-1.5 ${
             lecture.status === 'completed'
               ? 'bg-emerald-100 text-emerald-700'
               : lecture.status === 'live' || lecture.status === 'in-progress'
-              ? 'bg-violet/10 text-violet'
-              : 'bg-ink/5 text-ink/50'
+              ? 'bg-rose-100 text-rose-700 animate-pulse'
+              : 'bg-ink/5 text-ink/60'
           }`}>
-            {lecture.status === 'in-progress' ? 'live' : lecture.status}
+            {(lecture.status === 'live' || lecture.status === 'in-progress') && (
+              <span className="h-1.5 w-1.5 rounded-full bg-rose-600 animate-ping" />
+            )}
+            {lecture.status === 'in-progress' ? 'LIVE NOW' : lecture.status === 'live' ? 'LIVE NOW' : lecture.status}
           </span>
 
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+          {/* Action Buttons for Instructor */}
+          <div className="flex items-center gap-2">
+            {(lecture.status === 'live' || lecture.status === 'in-progress') ? (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => handleJoinLecture(lecture)}
+                  className="bg-gradient-to-r from-rose-500 to-red-600 text-white text-xs py-1.5 px-3 font-bold shadow-sm hover:shadow-glow flex items-center gap-1.5"
+                >
+                  <Radio size={13} className="animate-pulse" /> Join Live Room
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleEndLecture(lecture)}
+                  className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 text-xs py-1.5 px-3 font-bold flex items-center gap-1.5"
+                  title="Conclude and mark lecture complete"
+                >
+                  <CheckCircle2 size={13} /> Mark Done
+                </Button>
+              </>
+            ) : lecture.status === 'completed' ? (
+              <Button
+                type="button"
+                onClick={() => handleJoinLecture(lecture)}
+                className="bg-ink/5 text-ink hover:bg-ink/10 text-xs py-1.5 px-3 font-semibold flex items-center gap-1.5"
+              >
+                <Video size={13} /> Join Room
+              </Button>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  onClick={() => handleStartLecture(lecture)}
+                  disabled={startingId === lecture.id}
+                  className="bg-gradient-to-r from-violet to-electric text-white text-xs py-1.5 px-3 font-bold hover:shadow-glow transition flex items-center gap-1.5"
+                >
+                  {startingId === lecture.id ? (
+                    <><Loader2 size={13} className="animate-spin" /> Starting...</>
+                  ) : (
+                    <><Play size={12} className="fill-white" /> Start Lecture</>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => handleJoinLecture(lecture)}
+                  className="bg-ink/5 text-ink/70 hover:bg-ink/10 text-xs py-1.5 px-2.5 font-semibold flex items-center gap-1"
+                  title="Join room directly"
+                >
+                  <Video size={13} /> Join
+                </Button>
+              </>
+            )}
+
             <button
               type="button"
               onClick={() => openEdit(lecture)}
-              className="rounded-lg p-1.5 text-ink/40 hover:bg-violet/10 hover:text-violet transition"
+              className="rounded-lg p-1.5 text-ink/40 hover:bg-violet/10 hover:text-violet transition ml-1"
               aria-label="Edit lecture"
+              title="Edit lecture"
             >
               <Edit3 size={15} />
             </button>
@@ -273,6 +382,7 @@ export default function LectureManager({ courseId, lectures, onChange }: Lecture
               disabled={deletingId === lecture.id}
               className="rounded-lg p-1.5 text-ink/40 hover:bg-rose-50 hover:text-rose-600 transition disabled:opacity-50"
               aria-label="Delete lecture"
+              title="Delete lecture"
             >
               {deletingId === lecture.id ? (
                 <Loader2 size={15} className="animate-spin" />

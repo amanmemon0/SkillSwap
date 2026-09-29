@@ -10,15 +10,43 @@ import Navbar from '../components/Navbar';
 import { useLearningStore } from '../data/learningMockData';
 import type { Certificate } from '../data/skillswapTypes';
 
+import { api } from '../utils/api';
+
 export default function CertificateVerify() {
   const store = useLearningStore();
   const [certId, setCertId] = useState('');
+  const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<Certificate | null | 'not-found' | 'idle'>('idle');
 
-  const handleVerify = () => {
-    if (!certId.trim()) return;
-    const cert = store.verifyCertificate(certId.trim());
-    setResult(cert || 'not-found');
+  const handleVerify = async () => {
+    const query = certId.trim();
+    if (!query) return;
+    setLoading(true);
+    try {
+      const res = await api.verifyCertificate(query);
+      if (res?.valid && res?.certificate) {
+        setResult({
+          id: res.certificate.certificate_number,
+          certificateId: res.certificate.certificate_number,
+          courseId: '',
+          courseName: res.certificate.course?.title || 'Course Completion',
+          learnerId: '',
+          learnerName: res.certificate.learner?.full_name || 'Learner',
+          teacherId: '',
+          teacherName: 'Certified Instructor',
+          examScore: 100,
+          completedAt: res.certificate.issued_at,
+          issuedAt: res.certificate.issued_at,
+        });
+        return;
+      }
+      throw new Error('Not verified');
+    } catch {
+      const cert = store.verifyCertificate(query);
+      setResult(cert || 'not-found');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -108,6 +136,15 @@ export default function CertificateVerify() {
                       <DetailRow label="Certificate ID" value={(result as Certificate).certificateId} mono />
                       <DetailRow label="Status" value="Valid ✓" highlight />
                     </div>
+
+                    <div className="mt-6 flex justify-end">
+                      <Link
+                        to={`/certificates/${(result as Certificate).certificateId}`}
+                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 transition"
+                      >
+                        <Award size={14} /> View & Download Certificate
+                      </Link>
+                    </div>
                   </div>
                 )}
               </motion.div>
@@ -115,8 +152,8 @@ export default function CertificateVerify() {
           </AnimatePresence>
 
           {/* Hint */}
-          <p className="mt-8 text-xs text-ink/30">
-            Try: <button onClick={() => { setCertId('SS-2026-000124'); setResult('idle'); }} className="font-mono text-violet hover:underline">SS-2026-000124</button>
+          <p className="mt-8 text-xs text-ink/40">
+            Enter the unique Certificate ID (e.g. SS-YYYY-XXXX...) found at the bottom of any official SkillSwap certificate.
           </p>
         </motion.div>
       </div>

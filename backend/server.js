@@ -23,11 +23,26 @@ const userRoutes = require('./routes/userRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Rate limiting
+// Trust proxy for reverse proxies / edge deployments (Vercel, Render, etc.)
+// Ensures each user's request is attributed to their actual IP, not the proxy's IP.
+app.set('trust proxy', 1);
+
+// General rate limiter for SPA navigation (single page loads trigger 4-8 requests)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: process.env.NODE_ENV === 'development' ? 5000 : 100, // limit each IP
+  max: process.env.NODE_ENV === 'development' ? 5000 : 1000, // limit each IP to 1000 requests per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
   message: { message: 'Too many requests, please try again later.' },
+});
+
+// Stricter rate limiter specifically for authentication endpoints to prevent brute-forcing
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: process.env.NODE_ENV === 'development' ? 100 : 20, // limit each IP to 20 auth attempts per 15 min
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: 'Too many login attempts. Please try again after 15 minutes.' },
 });
 
 const allowedOrigins = [
@@ -44,7 +59,8 @@ const corsOptions = {
     if (
       !origin ||
       allowedOrigins.includes(origin) ||
-      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)
+      /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+      /^https:\/\/.*\.vercel\.app$/.test(origin)
     ) {
       callback(null, true);
     } else {
@@ -57,6 +73,10 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.use(limiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

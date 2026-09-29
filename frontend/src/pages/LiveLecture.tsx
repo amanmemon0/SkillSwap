@@ -17,6 +17,7 @@ import { useToast, ToastContainer } from '../components/ui/Toast';
 import { useDailyCall } from '../hooks/useDailyCall';
 import { useLearningStore } from '../data/learningMockData';
 import type { ChatMessage } from '../data/skillswapTypes';
+import { api } from '../utils/api';
 
 /* ─── Helpers ─── */
 const DAILY_DOMAIN = import.meta.env.VITE_DAILY_DOMAIN || 'your-team.daily.co';
@@ -135,23 +136,31 @@ function LiveLectureInner() {
     setChatInput('');
   };
 
-  const handleCompleteLecture = () => {
+  const handleCompleteLecture = async () => {
+    setShowComplete(false);
     if (isTeacher) {
+      try {
+        await api.updateLecture(lecture.id, { status: 'completed' });
+      } catch (err) {
+        console.warn('Could not update status to completed:', err);
+      }
       enrollments.forEach(e => {
         store.completeLecture(course.id, lecture.id, e.learnerId);
       });
-      show('Lecture marked as completed for all learners!', 'success');
+      show('Lecture marked as done! Ending session...', 'success');
+      // End the lecture and disconnect
+      await leave();
+      nav(`/teaching/${courseId}`);
     } else {
       store.completeLecture(course.id, lecture.id, currentUserId);
-      show('Attendance marked!', 'success');
+      show('Attendance marked as attended!', 'success');
     }
-    setShowComplete(false);
   };
 
   const handleLeave = async () => {
     setShowLeave(false);
     await leave();
-    nav(`/learning/${courseId}`);
+    nav(isTeacher ? `/teaching/${courseId}` : `/learning/${courseId}`);
   };
 
   /* ─── Build participants list for sidebar ─── */
@@ -225,7 +234,7 @@ function LiveLectureInner() {
 
           {/* Back button */}
           <button
-            onClick={() => nav(`/learning/${courseId}`)}
+            onClick={() => nav(isTeacher ? `/teaching/${courseId}` : `/learning/${courseId}`)}
             className="mt-3 text-xs text-white/40 hover:text-white/60 transition"
           >
             ← Back to course
@@ -409,7 +418,7 @@ function LiveLectureInner() {
             className="rounded-xl bg-emerald-500/20 px-4 py-2.5 text-sm font-bold text-emerald-400 hover:bg-emerald-500/30 transition flex items-center gap-2"
           >
             <CheckCircle2 size={16} />
-            {isTeacher ? 'Mark Complete' : 'Mark Attended'}
+            {isTeacher ? 'Mark Done & End' : 'Mark Attended'}
           </button>
 
           {/* Leave */}
@@ -436,12 +445,12 @@ function LiveLectureInner() {
       )}
       {showComplete && (
         <ConfirmModal
-          title={isTeacher ? 'Mark Lecture Complete' : 'Mark as Attended'}
+          title={isTeacher ? 'End Lecture & Mark Done?' : 'Mark as Attended?'}
           message={isTeacher
-            ? `Mark "${lecture.title}" as completed for all enrolled learners?`
+            ? `Mark "${lecture.title}" as completed and end the session now? Camera and audio will disconnect and learners' completion will be finalized.`
             : `Confirm your attendance for "${lecture.title}"? This cannot be undone.`
           }
-          confirmLabel={isTeacher ? 'Mark Complete' : 'Confirm Attendance'}
+          confirmLabel={isTeacher ? 'Mark Done & End Lecture' : 'Confirm Attendance'}
           onConfirm={handleCompleteLecture}
           onCancel={() => setShowComplete(false)}
         />

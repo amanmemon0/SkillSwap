@@ -43,28 +43,6 @@ export default function Messages() {
 
       let convs = await api.getConversations();
 
-      // If no conversation exists yet, auto-create one with an exchange partner or another member
-      if (!convs || convs.length === 0) {
-        try {
-          const exchanges = await api.getExchanges();
-          let partnerId = exchanges?.[0]?.receiver_id === me._id ? exchanges?.[0]?.sender_id : exchanges?.[0]?.receiver_id;
-          if (!partnerId) {
-            const profiles = await api.getProfiles();
-            const other = (profiles || []).find((p: any) => p.id !== me._id);
-            partnerId = other?.id;
-          }
-          if (partnerId) {
-            const newConv = await api.createConversation(partnerId);
-            if (newConv) {
-              await api.sendMessage(newConv.id, "Hi! Excited to connect on SkillSwap!").catch(() => {});
-              convs = await api.getConversations();
-            }
-          }
-        } catch (e) {
-          console.error('Auto create conversation failed:', e);
-        }
-      }
-
       const chatsList: Chat[] = [];
 
       for (const conv of convs || []) {

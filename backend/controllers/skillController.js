@@ -66,7 +66,23 @@ const pendingRequests = async (req, res, next) => {
   try { const { data, error } = await supabase.from('skill_requests').select('*, requester:profiles!skill_requests_requester_id_fkey(id, full_name, email)').eq('status', 'pending').order('created_at'); if (error) return dbError(res, error); return res.json(data.map(mapRequest)); } catch (error) { return next(error); }
 };
 const reviewRequest = async (req, res, next) => {
-  try { const { data, error } = await supabase.from('skill_requests').update({ status: req.body.decision, reviewer_id: req.user.id, reviewer_note: req.body.reviewerNote || null, reviewed_at: new Date().toISOString() }).eq('id', req.params.id).eq('status', 'pending').select('*, requester:profiles!skill_requests_requester_id_fkey(id, full_name, email)').maybeSingle(); if (error) return dbError(res, error); if (!data) return res.status(404).json({ message: 'Pending skill request not found' }); return res.json(mapRequest(data)); } catch (error) { return next(error); }
+  try {
+    const { data, error } = await supabase.from('skill_requests').update({ status: req.body.decision, reviewer_id: req.user.id, reviewer_note: req.body.reviewerNote || null, reviewed_at: new Date().toISOString() }).eq('id', req.params.id).eq('status', 'pending').select('*, requester:profiles!skill_requests_requester_id_fkey(id, full_name, email)').maybeSingle();
+    if (error) return dbError(res, error);
+    if (!data) return res.status(404).json({ message: 'Pending skill request not found' });
+    if (req.body.decision === 'approved') {
+      const { data: existingSkill } = await supabase.from('skills').select('id').ilike('name', data.skill_name).maybeSingle();
+      if (!existingSkill) {
+        await supabase.from('skills').insert({
+          name: data.skill_name,
+          category: data.category || 'other',
+          approved: true,
+          created_by: data.requester_id || req.user.id
+        });
+      }
+    }
+    return res.json(mapRequest(data));
+  } catch (error) { return next(error); }
 };
 
 module.exports = { listSkills, mySkills, setMySkills, getCategories, getMyRequests, createRequest, updateRequest, revokeRequest, pendingRequests, reviewRequest };

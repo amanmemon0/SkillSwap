@@ -120,6 +120,47 @@ const createCourse = async (req, res, next) => {
       .select()
       .single();
     if (error) return respondDbError(res, error);
+
+    // Initialize certification exam & questions so any newly created course has an active assessment
+    try {
+      const { data: exam } = await supabase.from('exams').insert({
+        course_id: data.id,
+        title: `${data.title} Certification Exam`,
+        description: `Assessment of core concepts and practical understanding for ${data.title}.`,
+        time_limit_mins: 15,
+        pass_mark_percentage: 70,
+        status: 'active',
+      }).select().single();
+
+      if (exam) {
+        await supabase.from('exam_questions').insert([
+          {
+            exam_id: exam.id,
+            question_text: `What is the primary architectural goal when structuring ${data.skill_name || data.title}?`,
+            options: ['Maximizing code reusability and decoupling', 'Minimizing file count', 'Avoiding functions', 'Using inline styles exclusively'],
+            correct_option_idx: 0,
+            order: 1,
+          },
+          {
+            exam_id: exam.id,
+            question_text: 'Which best practice ensures high maintainability and predictable state management?',
+            options: ['Direct mutation of shared state', 'Unidirectional data flow and clear immutability contracts', 'Global window variables', 'Nested circular references'],
+            correct_option_idx: 1,
+            order: 2,
+          },
+          {
+            exam_id: exam.id,
+            question_text: 'How should secure production APIs handle unexpected client input or schema variations?',
+            options: ['Execute queries directly without sanitization', 'Validate input against strict schemas and allowlist columns', 'Return raw database errors to the user', 'Ignore status codes and always return 200 OK'],
+            correct_option_idx: 1,
+            order: 3,
+          },
+        ]);
+      }
+    } catch (examErr) {
+      console.warn('Note: Auto-exam creation skipped or failed:', examErr?.message);
+    }
+
     return res.status(201).json(data);
   } catch (error) { return next(error); }
 };
@@ -177,6 +218,60 @@ const enroll = async (req, res, next) => {
       if (rpcError.message?.includes('insufficient_credits')) {
         return res.status(402).json({ message: 'Insufficient credits to enroll in this course', code: 'insufficient_credits' });
       }
+
+      // If the RPC has not been migrated on remote PostgreSQL, perform direct safe fallback
+      if (rpcError.code === 'PGRST202' || rpcError.message?.includes('Could not find the function')) {
+        const { data: existing } = await supabase
+          .from('course_enrollments')
+          .select('id, status')
+          .eq('course_id', course.id)
+          .eq('learner_id', req.user.id)
+          .maybeSingle();
+
+        if (existing && existing.status === 'active') {
+          return res.status(409).json({ message: 'You are already enrolled in this course', code: 'already_enrolled' });
+        }
+
+        const { data: learnerProfile } = await supabase
+          .from('profiles')
+          .select('credits')
+          .eq('id', req.user.id)
+          .maybeSingle();
+
+        const cost = course.credit_cost ?? 25;
+        const currentCredits = learnerProfile?.credits ?? 50;
+        if (currentCredits < cost) {
+          return res.status(402).json({ message: 'Insufficient credits to enroll in this course', code: 'insufficient_credits' });
+        }
+
+        await supabase
+          .from('profiles')
+          .update({ credits: Math.max(0, currentCredits - cost) })
+          .eq('id', req.user.id);
+
+        let enrollmentRow;
+        if (existing && existing.id) {
+          const { data: updated, error: updateErr } = await supabase
+            .from('course_enrollments')
+            .update({ status: 'active', enrolled_at: new Date().toISOString() })
+            .eq('id', existing.id)
+            .select()
+            .single();
+          if (updateErr) return respondDbError(res, updateErr);
+          enrollmentRow = updated;
+        } else {
+          const { data: inserted, error: insertErr } = await supabase
+            .from('course_enrollments')
+            .insert({ course_id: course.id, learner_id: req.user.id, status: 'active' })
+            .select()
+            .single();
+          if (insertErr) return respondDbError(res, insertErr);
+          enrollmentRow = inserted;
+        }
+
+        return res.status(201).json(enrollmentRow);
+      }
+
       return respondDbError(res, rpcError, 'Unable to enroll in course');
     }
 
@@ -308,7 +403,17 @@ const updateLecture = async (req, res, next) => {
     const updates = {};
     [['title', 'title'], ['description', 'description'], ['order', 'order'],
      ['durationMinutes', 'duration_minutes'], ['scheduledAt', 'scheduled_at'], ['status', 'status']]
-      .forEach(([from, to]) => { if (b[from] !== undefined) updates[to] = b[from]; });
+      .forEach(([from, to]) => {
+        if (b[from] !== undefined) {
+          if (from === 'scheduledAt') {
+            updates[to] = b[from] ? new Date(b[from]).toISOString() : null;
+          } else if (from === 'status' && b[from] === 'in-progress') {
+            updates[to] = 'live';
+          } else {
+            updates[to] = b[from];
+          }
+        }
+      });
     const result = await supabase.from('lectures').update(updates).eq('id', req.params.lectureId).select().single();
     if (result.error) return respondDbError(res, result.error);
     return res.json(result.data);

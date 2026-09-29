@@ -32,6 +32,7 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Avatar, Button } from "../components/ui/Primitives";
 import { api } from "../utils/api";
 import { SkillApprovalQueue } from "../features/skill-management/SkillManagement";
@@ -682,32 +683,38 @@ function DashboardOverview({
   users: User[];
   loading: boolean;
 }) {
-  const stats = useMemo(() => {
-    if (loading) return null;
-    const active = users.filter((u) => u.status === "Active").length;
-    const admins = users.filter((u) => u.role === "Admin").length;
-    const totalSwaps = users.reduce((s, u) => s + (u.completedSwaps ?? 0), 0);
-    const avgRating =
-      users.length > 0
-        ? users.reduce((s, u) => s + (u.rating ?? 0), 0) / users.length
-        : 0;
-    return { total: users.length, active, admins, totalSwaps, avgRating };
-  }, [users, loading]);
+  const [metrics, setMetrics] = useState<any>(null);
+  const [timeline, setTimeline] = useState<{ date: string; count: number }[]>([]);
+  const [metricsLoading, setMetricsLoading] = useState(true);
 
-  const statCards = stats
-    ? [
-      { label: "Total Users", value: stats.total, icon: "👥", color: "bg-violet/10 text-violet" },
-      { label: "Active Users", value: stats.active, icon: "🟢", color: "bg-emerald-50 text-emerald-700" },
-      { label: "Admins", value: stats.admins, icon: "🛡️", color: "bg-amber-50 text-amber-700" },
-      { label: "Total Swaps", value: stats.totalSwaps, icon: "🔄", color: "bg-blue-50 text-blue-700" },
-      {
-        label: "Avg Rating",
-        value: stats.avgRating.toFixed(1) + " ★",
-        icon: "⭐",
-        color: "bg-yellow-50 text-yellow-700",
-      },
-    ]
-    : [];
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([
+      api.adminGetOverviewMetrics().catch(() => null),
+      api.adminGetRegistrationAnalytics(30).catch(() => []),
+    ]).then(([m, t]) => {
+      if (mounted) {
+        setMetrics(m);
+        setTimeline(Array.isArray(t) ? t : []);
+        setMetricsLoading(false);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  const totalUsers = metrics?.totalUsers ?? users.length;
+  const activeUsers = users.filter((u) => u.status === "Active").length;
+  const activeCourses = metrics?.activeCourses ?? 0;
+  const pendingCourses = metrics?.pendingCourses ?? 0;
+  const totalSwaps = metrics?.totalExchanges ?? users.reduce((s, u) => s + (u.completedSwaps ?? 0), 0);
+
+  const statCards = [
+    { label: "Total Users", value: totalUsers, icon: "👥", color: "bg-violet/10 text-violet" },
+    { label: "Active Users", value: activeUsers, icon: "🟢", color: "bg-emerald-50 text-emerald-700" },
+    { label: "Active Courses", value: activeCourses, icon: "📚", color: "bg-indigo-50 text-indigo-700" },
+    { label: "Pending Review", value: pendingCourses, icon: "⏳", color: "bg-amber-50 text-amber-700" },
+    { label: "Total Exchanges", value: totalSwaps, icon: "🔄", color: "bg-blue-50 text-blue-700" },
+  ];
 
   return (
     <div className="space-y-6">
@@ -715,11 +722,11 @@ function DashboardOverview({
         <p className="eyebrow">Admin workspace / overview</p>
         <h1 className="mt-2 font-display text-4xl sm:text-5xl">Dashboard</h1>
         <p className="mt-2 text-sm text-ink/55">
-          Platform overview and quick statistics.
+          Real-time platform metrics and verified activity overview.
         </p>
       </div>
 
-      {loading ? (
+      {loading && metricsLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i} className="rounded-2xl bg-white p-5 shadow-sm border animate-pulse h-24" />
@@ -728,7 +735,7 @@ function DashboardOverview({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {statCards.map(({ label, value, icon, color }) => (
-            <div key={label} className={`rounded-2xl bg-white p-5 shadow-sm border`}>
+            <div key={label} className="rounded-2xl bg-white p-5 shadow-sm border">
               <div className={`inline-flex items-center gap-1.5 rounded-xl px-2.5 py-1 text-xs font-bold ${color}`}>
                 {icon} {label}
               </div>
@@ -737,6 +744,85 @@ function DashboardOverview({
           ))}
         </div>
       )}
+
+      {/* 30-Day Activity Strip */}
+      {metrics?.recentActivity && (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div className="rounded-2xl bg-white p-5 border border-ink/5 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink/40">New Enrollments (Last 30d)</p>
+            <p className="mt-2 text-3xl font-black text-emerald-600">+{metrics.recentActivity.newEnrollments30d}</p>
+            <p className="mt-1 text-xs text-ink/45">Direct learner enrollment activity</p>
+          </div>
+          <div className="rounded-2xl bg-white p-5 border border-ink/5 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink/40">New Courses (Last 30d)</p>
+            <p className="mt-2 text-3xl font-black text-violet">+{metrics.recentActivity.newCourses30d}</p>
+            <p className="mt-1 text-xs text-ink/45">Created by community tutors</p>
+          </div>
+          <div className="rounded-2xl bg-white p-5 border border-ink/5 shadow-sm">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-ink/40">New Exchanges (Last 30d)</p>
+            <p className="mt-2 text-3xl font-black text-electric">+{metrics.recentActivity.newExchanges30d}</p>
+            <p className="mt-1 text-xs text-ink/45">Peer-to-peer proposals initiated</p>
+          </div>
+        </div>
+      )}
+
+      {/* User Registration Timeline Chart */}
+      <div className="rounded-3xl border bg-white p-6 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+          <div>
+            <h3 className="font-bold text-lg">User Registration Trend</h3>
+            <p className="text-xs text-ink/50">Daily signups over the last 30 days from database created_at records</p>
+          </div>
+          <span className="text-xs font-bold text-violet bg-violet/10 px-3 py-1.5 rounded-full">
+            {timeline.reduce((s, d) => s + (d.count || 0), 0)} new signups (last 30d)
+          </span>
+        </div>
+        <div className="h-64 w-full">
+          {timeline.length > 0 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={timeline} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="regGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#7C3AED" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f5" />
+                <XAxis
+                  dataKey="date"
+                  tickFormatter={(d) => {
+                    try {
+                      const dt = new Date(d);
+                      return `${dt.getDate()} ${dt.toLocaleString('en-US', { month: 'short' })}`;
+                    } catch {
+                      return d;
+                    }
+                  }}
+                  tick={{ fontSize: 11, fill: '#8c8c9a' }}
+                />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#8c8c9a' }} />
+                <Tooltip
+                  contentStyle={{ borderRadius: 12, border: '1px solid rgba(0,0,0,0.08)', boxShadow: '0 4px 16px rgba(0,0,0,0.06)' }}
+                  labelFormatter={(d) => `Date: ${d}`}
+                  formatter={(val) => [`${val} new users`, 'Registrations']}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  stroke="#7C3AED"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#regGrad)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex h-full items-center justify-center text-xs text-ink/40">
+              {metricsLoading ? 'Loading registration analytics...' : 'No registration data recorded in this period.'}
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Recent users quick table */}
       <div className="rounded-3xl border bg-white shadow-sm overflow-hidden">

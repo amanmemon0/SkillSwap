@@ -5,7 +5,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useState } from 'react';
 import {
   ArrowLeft, BookOpen, CheckCircle2, Circle, Clock, Lock,
-  FileText, Award, ChevronRight, Play, PartyPopper, Star, StarHalf
+  FileText, Award, ChevronRight, Play, Radio, Video, PartyPopper, Star, StarHalf
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
@@ -153,9 +153,11 @@ export default function LearningCourseDetail() {
 
           <div className="space-y-2">
             {lectures.map((lecture, i) => {
+              const isTeacher = course.teacherId === store.currentUserId;
               const isCompleted = lecture.status === 'completed';
-              const isCurrent = !isCompleted && (i === 0 || lectures[i - 1]?.status === 'completed');
-              const isLocked = !isCompleted && !isCurrent;
+              const isLive = lecture.status === 'live' || lecture.status === 'in-progress';
+              const isCurrent = !isCompleted && (isLive || i === 0 || lectures[i - 1]?.status === 'completed');
+              const isLocked = !isTeacher && !isCompleted && !isCurrent && !isLive;
 
               return (
                 <motion.div
@@ -164,16 +166,23 @@ export default function LearningCourseDetail() {
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.03 }}
                   className={`flex items-center gap-4 rounded-2xl p-4 transition border ${
-                    isCompleted
+                    isLive
+                      ? 'bg-rose-50/60 border-rose-200 shadow-sm'
+                      : isCompleted
                       ? 'bg-emerald-50/50 border-emerald-100'
                       : isCurrent
-                        ? 'bg-violet/5 border-violet/20 shadow-sm'
-                        : 'bg-white border-ink/5 opacity-60'
+                      ? 'bg-violet/5 border-violet/20 shadow-sm'
+                      : 'bg-white border-ink/5 opacity-60'
                   }`}
                 >
                   {/* Status Icon */}
                   <div className="shrink-0">
-                    {isCompleted ? (
+                    {isLive ? (
+                      <span className="relative flex h-5 w-5 items-center justify-center">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-rose-600"></span>
+                      </span>
+                    ) : isCompleted ? (
                       <CheckCircle2 size={22} className="text-emerald-500" />
                     ) : isCurrent ? (
                       <Circle size={22} className="text-violet fill-violet/20" />
@@ -184,28 +193,61 @@ export default function LearningCourseDetail() {
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm font-bold ${isCompleted ? 'text-emerald-700' : isCurrent ? 'text-ink' : 'text-ink/40'}`}>
+                    <p className={`text-sm font-bold ${isLive ? 'text-rose-700' : isCompleted ? 'text-emerald-700' : isCurrent ? 'text-ink' : 'text-ink/40'}`}>
                       Lecture {lecture.order}: {lecture.title}
                     </p>
                     <div className="mt-0.5 flex items-center gap-3 text-xs text-ink/40">
                       <span className="flex items-center gap-1"><Clock size={11} /> {lecture.duration}</span>
-                      <StatusBadge status={isCompleted ? 'completed' : isCurrent ? 'in-progress' : 'upcoming'} />
+                      <StatusBadge status={isLive ? 'live' : isCompleted ? 'completed' : isCurrent ? 'in-progress' : 'upcoming'} />
                     </div>
                   </div>
 
                   {/* Action */}
-                  {(isCompleted || isCurrent) && (
-                    <Button
-                      onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
-                      className={`text-xs py-1.5 ${
-                        isCurrent
-                          ? 'bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow'
-                          : 'bg-ink/5 text-ink/50 hover:bg-ink/10'
-                      }`}
-                    >
-                      {isCurrent ? <><Play size={12} /> Join Lecture</> : 'Review'}
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isTeacher ? (
+                      <>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/teaching/${course.id}/lecture/${lecture.id}`);
+                          }}
+                          className="bg-gradient-to-r from-violet to-electric text-white text-xs py-1.5 px-3 font-bold flex items-center gap-1 shadow-sm"
+                        >
+                          <Play size={12} className="fill-white" /> {isLive ? 'Join Live' : 'Start Lecture'}
+                        </Button>
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            nav(`/teaching/${course.id}/lecture/${lecture.id}`);
+                          }}
+                          className="bg-ink/5 text-ink/70 hover:bg-ink/10 text-xs py-1.5 px-2.5 font-semibold flex items-center gap-1"
+                        >
+                          <Video size={12} /> Join
+                        </Button>
+                      </>
+                    ) : isLive ? (
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
+                        className="bg-gradient-to-r from-rose-500 to-red-600 text-white text-xs py-1.5 px-3.5 font-bold shadow-sm hover:shadow-glow flex items-center gap-1.5"
+                      >
+                        <Radio size={12} className="animate-pulse" /> Join Live
+                      </Button>
+                    ) : isCurrent ? (
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
+                        className="bg-gradient-to-r from-violet to-electric text-white hover:shadow-glow text-xs py-1.5 px-3 font-bold flex items-center gap-1"
+                      >
+                        <Play size={12} className="fill-white" /> Join Lecture
+                      </Button>
+                    ) : isCompleted ? (
+                      <Button
+                        onClick={(e) => { e.stopPropagation(); nav(`/learning/${course.id}/lecture/${lecture.id}`); }}
+                        className="bg-ink/5 text-ink/60 hover:bg-ink/10 text-xs py-1.5 px-3 font-semibold"
+                      >
+                        Review
+                      </Button>
+                    ) : null}
+                  </div>
                 </motion.div>
               );
             })}

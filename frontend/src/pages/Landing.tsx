@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -9,6 +9,7 @@ import {
   Heart,
   Instagram,
   Linkedin,
+  Loader2,
   MapPin,
   Search,
   Sparkles,
@@ -18,7 +19,8 @@ import {
 } from 'lucide-react';
 import { Avatar, Button, LiveBadge, SkillTag } from '../components/ui/Primitives';
 import LiveFeed from '../components/LiveFeed';
-import { popularSkills, featuredSwappers } from '../data/mock';
+import { popularSkills } from '../data/mock';
+import { api } from '../utils/api';
 import Navbar from '../components/Navbar';
 
 const reveal = { hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0 } };
@@ -26,6 +28,38 @@ const stagger = { hidden: {}, show: { transition: { staggerChildren: 0.1 } } };
 
 export default function Landing() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [topSwappers, setTopSwappers] = useState<any[]>([]);
+  const [loadingSwappers, setLoadingSwappers] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    api.getProfiles()
+      .then((profiles) => {
+        if (!mounted) return;
+        const mapped = (profiles || [])
+          .map((p: any) => ({
+            id: p.id,
+            name: p.full_name || 'Member',
+            location: p.location || p.city || 'Nearby',
+            avatar: (p.full_name || 'M').charAt(0).toUpperCase(),
+            offers: p.primary_skill ? [p.primary_skill] : ['Skills'],
+            wants: Array.isArray(p.learning_skills) && p.learning_skills.length > 0 ? p.learning_skills.slice(0, 2) : ['Learning'],
+            rating: p.rating ? Number(p.rating).toFixed(1) : '5.0',
+            exchanges: p.completed_swaps ?? 0,
+            online: true,
+          }))
+          .sort((a, b) => b.exchanges - a.exchanges || Number(b.rating) - Number(a.rating));
+        setTopSwappers(mapped.slice(0, 4));
+      })
+      .catch((err) => {
+        console.error('Failed to load featured swappers:', err);
+      })
+      .finally(() => {
+        if (mounted) setLoadingSwappers(false);
+      });
+
+    return () => { mounted = false; };
+  }, []);
 
   return (
     <main className="min-h-screen bg-surface text-ink overflow-hidden">
@@ -366,59 +400,78 @@ export default function Landing() {
             <p className="mt-4 text-ink/55">Discover active members ready to exchange skills</p>
           </div>
 
-          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {featuredSwappers.map((person, i) => (
-              <motion.div
-                key={person.name}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-                className="group rounded-3xl bg-surface p-6 text-center transition hover-lift border border-ink/5"
-              >
-                <div className="mx-auto">
-                  <Avatar name={person.name} size="xl" showStatus status={person.online ? 'online' : 'offline'} />
+          {loadingSwappers ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-3xl bg-surface p-6 text-center border border-ink/5 animate-pulse">
+                  <div className="mx-auto h-20 w-20 rounded-full bg-ink/10" />
+                  <div className="mx-auto mt-4 h-4 w-28 rounded bg-ink/10" />
+                  <div className="mx-auto mt-2 h-3 w-20 rounded bg-ink/5" />
+                  <div className="mt-4 h-12 rounded-xl bg-ink/5" />
                 </div>
-                <h3 className="mt-4 font-display text-lg font-bold">{person.name}</h3>
-                <p className="mt-1 flex items-center justify-center gap-1 text-xs text-ink/50">
-                  <MapPin size={11} /> {person.location}
-                </p>
-
-                <div className="mt-4">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Offers</p>
-                  <div className="mt-1.5 flex flex-wrap justify-center gap-1">
-                    {person.offers.map((s) => (
-                      <SkillTag key={s} skill={s} />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Wants</p>
-                  <div className="mt-1.5 flex flex-wrap justify-center gap-1">
-                    {person.wants.map((s) => (
-                      <SkillTag key={s} skill={s} />
-                    ))}
-                  </div>
-                </div>
-
-                <div className="mt-4 flex items-center justify-center gap-3 text-xs">
-                  <span className="flex items-center gap-1 font-bold">
-                    <Star size={12} className="text-warmyellow fill-warmyellow" /> {person.rating}
-                  </span>
-                  <span className="text-ink/30">·</span>
-                  <span className="text-ink/60">🔄 {person.exchanges} exchanges</span>
-                </div>
-
-                <Link
-                  to="/register"
-                  className="mt-4 inline-flex rounded-full bg-violet/10 px-4 py-2 text-xs font-bold text-violet opacity-0 transition-all group-hover:opacity-100 hover:bg-violet hover:text-white"
+              ))}
+            </div>
+          ) : topSwappers.length > 0 ? (
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {topSwappers.map((person, i) => (
+                <motion.div
+                  key={person.id || person.name}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.08 }}
+                  className="group rounded-3xl bg-surface p-6 text-center transition hover-lift border border-ink/5"
                 >
-                  View Profile
-                </Link>
-              </motion.div>
-            ))}
-          </div>
+                  <div className="mx-auto">
+                    <Avatar name={person.name} size="xl" showStatus status={person.online ? 'online' : 'offline'} />
+                  </div>
+                  <h3 className="mt-4 font-display text-lg font-bold">{person.name}</h3>
+                  <p className="mt-1 flex items-center justify-center gap-1 text-xs text-ink/50">
+                    <MapPin size={11} /> {person.location}
+                  </p>
+
+                  <div className="mt-4">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Offers</p>
+                    <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+                      {person.offers.map((s: string) => (
+                        <SkillTag key={s} skill={s} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-ink/40">Wants</p>
+                    <div className="mt-1.5 flex flex-wrap justify-center gap-1">
+                      {person.wants.map((s: string) => (
+                        <SkillTag key={s} skill={s} />
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-center gap-3 text-xs">
+                    <span className="flex items-center gap-1 font-bold">
+                      <Star size={12} className="text-warmyellow fill-warmyellow" /> {person.rating}
+                    </span>
+                    <span className="text-ink/30">·</span>
+                    <span className="text-ink/60">🔄 {person.exchanges} exchanges</span>
+                  </div>
+
+                  <Link
+                    to={person.id ? `/users/${person.id}` : '/register'}
+                    className="mt-4 inline-flex rounded-full bg-violet/10 px-4 py-2 text-xs font-bold text-violet opacity-0 transition-all group-hover:opacity-100 hover:bg-violet hover:text-white"
+                  >
+                    View Profile
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-3xl bg-surface p-12 text-center border border-ink/5 text-ink/50">
+              <Users size={36} className="mx-auto mb-2 text-ink/30" />
+              <p className="font-bold">No public member profiles yet</p>
+              <Link to="/register" className="mt-3 inline-block text-xs font-bold text-violet">Be the first to join →</Link>
+            </div>
+          )}
         </div>
       </section>
 

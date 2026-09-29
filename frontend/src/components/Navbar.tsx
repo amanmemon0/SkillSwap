@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { Bell, LogOut, MapPin, Menu, Sparkles, UserRound, X } from 'lucide-react';
+import { Bell, LogOut, MapPin, Menu, Sparkles, UserRound, X, ShieldAlert } from 'lucide-react';
 import { api } from '../utils/api';
 import { Avatar, Button } from './ui/Primitives';
 import NotificationBell from './NotificationBell';
@@ -30,7 +30,7 @@ const authLinks: NavLinkItem[] = [
 export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'auth' | 'auto' }) {
   const nav = useNavigate();
   const location = useLocation();
-  const [profile, setProfile] = useState<{ id: string; full_name: string; location: string; email: string } | null>(null);
+  const [profile, setProfile] = useState<{ id: string; full_name: string; location: string; email: string; role?: string } | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -49,6 +49,7 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
           full_name: user.name,
           location: user.location,
           email: user.email,
+          role: user.role,
         });
 
         // Fetch notifications from backend
@@ -283,7 +284,15 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
             </div>
           )}
           {isAuthenticated && (
-            <div className="mt-3 border-t border-ink/5 pt-3">
+            <div className="mt-3 border-t border-ink/5 pt-3 space-y-1">
+              {profile?.role === 'admin' && (
+                <button
+                  onClick={() => { setMenuOpen(false); nav('/admin'); }}
+                  className="flex w-full items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-violet bg-violet/5"
+                >
+                  <ShieldAlert size={16} /> Admin Workspace
+                </button>
+              )}
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}
                 className="flex w-full items-center gap-2 rounded-xl px-4 py-3 text-sm font-bold text-coral"
@@ -317,6 +326,15 @@ export default function Navbar({ variant = 'auto' }: { variant?: 'public' | 'aut
             </p>
           </div>
           <div className="mt-4 border-t border-ink/10 pt-3 space-y-1">
+            {profile?.role === 'admin' && (
+              <button
+                type="button"
+                onClick={() => { setProfileOpen(false); nav('/admin'); }}
+                className="flex w-full items-center gap-2 rounded-xl px-2 py-2.5 text-left text-sm font-bold text-violet bg-violet/5 hover:bg-violet/10 transition"
+              >
+                <ShieldAlert size={16} /> Admin Workspace
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { setProfileOpen(false); nav('/profile'); }}

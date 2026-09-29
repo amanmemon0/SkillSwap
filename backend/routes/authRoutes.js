@@ -2,7 +2,8 @@ const express = require('express');
 const {
   registerUser, loginUser, forgotPassword, resetPassword,
   getMe, updateProfile, getPublicProfiles, getAllUsers,
-  getAdminTableData, adminUpdateUser, adminDeleteUser,
+  getAdminTableData, getAdminOverviewMetrics, getRegistrationAnalytics,
+  adminUpdateUser, adminDeleteUser,
 } = require('../controllers/authController');
 const { protect, isAdmin } = require('../middleware/auth');
 const { validate } = require('../middleware/validate');
@@ -26,6 +27,8 @@ router.get('/profiles', getPublicProfiles);
 
 // Admin routes
 router.get('/admin/users', protect, isAdmin, getAllUsers);
+router.get('/admin/analytics/overview', protect, isAdmin, getAdminOverviewMetrics);
+router.get('/admin/analytics/registrations', protect, isAdmin, getRegistrationAnalytics);
 router.get('/admin/tables/:table', protect, isAdmin, getAdminTableData);
 router.put('/admin/users/:id', protect, isAdmin, validate(adminUserUpdateSchema), adminUpdateUser);
 router.delete('/admin/users/:id', protect, isAdmin, adminDeleteUser);

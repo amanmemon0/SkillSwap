@@ -226,14 +226,14 @@ export default function UserDashboard() {
             {/* Stats Row */}
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
               <StatCard
-                label="Skills Offered"
-                value={profileMetrics.skillsOffered}
-                icon={<Layers size={18} className="text-violet" />}
+                label="Learning Courses"
+                value={store.getMyLearning(userId || '').length}
+                icon={<BookOpen size={18} className="text-electric" />}
               />
               <StatCard
-                label="Skills Wanted"
-                value={profileMetrics.skillsWanted}
-                icon={<BookOpen size={18} className="text-electric" />}
+                label="Teaching Courses"
+                value={store.getMyTeachingCourses(userId || '').length}
+                icon={<GraduationCap size={18} className="text-violet" />}
               />
               <StatCard
                 label="Active Exchanges"

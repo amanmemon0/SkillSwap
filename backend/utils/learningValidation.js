@@ -18,7 +18,22 @@ const courseSchema = z.object({
   status: z.enum(['draft', 'pending_review', 'published', 'archived']).optional(),
 });
 
-const lectureSchema = z.object({ title: z.string().trim().min(1).max(160), description: z.string().trim().max(4000).optional().nullable(), order: z.number().int().min(1), durationMinutes: z.number().int().min(0).optional(), scheduledAt: z.string().datetime().optional().nullable(), status: z.enum(['upcoming', 'live', 'completed']).optional() });
+const datetimeSchema = z.union([
+  z.string().datetime({ offset: true }),
+  z.string().datetime(),
+  z.string().refine((val) => !val || !isNaN(Date.parse(val)), { message: 'Invalid datetime format' }),
+  z.literal(''),
+  z.null(),
+]).optional().nullable();
+
+const lectureSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  description: z.string().trim().max(4000).optional().nullable().or(z.literal('')),
+  order: z.number().int().min(1).optional(),
+  durationMinutes: z.number().int().min(0).optional(),
+  scheduledAt: datetimeSchema,
+  status: z.enum(['upcoming', 'live', 'in-progress', 'completed']).optional(),
+});
 const attendanceSchema = z.object({ status: z.enum(['present', 'absent']).optional(), joinedAt: z.string().datetime().optional().nullable(), leftAt: z.string().datetime().optional().nullable(), minutesAttended: z.number().int().min(0).optional() });
 const examSchema = z.object({ title: z.string().trim().min(1).max(160), description: z.string().trim().max(4000).optional().nullable(), timeLimitMins: z.number().int().min(0).optional(), passMarkPercentage: z.number().min(0).max(100).optional(), status: z.enum(['active', 'inactive']).optional() });
 const questionSchema = z.object({ questionText: z.string().trim().min(1).max(4000), options: z.array(z.string().trim().min(1)).min(2), correctOptionIdx: z.number().int().min(0), order: z.number().int().min(1) }).refine((value) => value.correctOptionIdx < value.options.length, { message: 'correctOptionIdx must reference an option', path: ['correctOptionIdx'] });

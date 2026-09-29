@@ -12,15 +12,35 @@ const generateToken = (id, email) => {
 const normalizeRole = (role) => String(role || 'user').toLowerCase() === 'admin' ? 'admin' : 'user';
 
 // Keep this list explicit: the endpoint is an admin tool, not a way to query
-// arbitrary PostgREST relations supplied by a client.
-const adminTables = [
-  'users', 'profiles', 'skills', 'member_skills', 'skill_requests',
-  'exchanges', 'notifications', 'conversations', 'messages', 'reviews',
-  'courses', 'course_enrollments', 'lectures', 'lecture_attendance',
-  'exams', 'exam_questions', 'exam_attempts', 'certificate_requests',
-  'certificates', 'lecture_messages', 'community_posts', 'post_comments',
-  'post_reactions',
-];
+// Explicit column allowlists per table to prevent accidental or malicious leakage
+// of sensitive credentials (e.g. password_hash, tokens, session material).
+const adminTableAllowlists = {
+  users: ['id', 'email', 'role', 'created_at', 'deleted_at'],
+  profiles: ['id', 'full_name', 'avatar_url', 'location', 'bio', 'role', 'created_at', 'username', 'phone', 'country', 'state', 'city', 'primary_skill', 'skill_level', 'learning_skills', 'availability', 'learning_mode', 'status', 'deleted_at', 'rating', 'total_reviews', 'completed_swaps', 'pending_swaps', 'cancelled_swaps', 'reports_count', 'email', 'credits'],
+  skills: ['id', 'name', 'category', 'approved', 'created_by', 'created_at'],
+  member_skills: ['profile_id', 'skill_id', 'type', 'created_at'],
+  skill_requests: ['id', 'requester_id', 'skill_name', 'category', 'status', 'reviewer_id', 'reviewer_note', 'reviewed_at', 'created_at'],
+  exchanges: ['id', 'sender_id', 'receiver_id', 'sender_skill_id', 'receiver_skill_id', 'sender_skill_name', 'receiver_skill_name', 'status', 'message', 'created_at', 'updated_at', 'sender_email', 'receiver_email'],
+  notifications: ['id', 'profile_id', 'exchange_id', 'title', 'detail', 'read', 'created_at', 'type'],
+  conversations: ['id', 'user1_id', 'user2_id', 'created_at'],
+  messages: ['id', 'conversation_id', 'sender_id', 'body', 'created_at', 'read_at'],
+  reviews: ['id', 'reviewer_id', 'reviewee_id', 'exchange_id', 'rating', 'comment', 'created_at'],
+  courses: ['id', 'teacher_id', 'skill_id', 'skill_name', 'title', 'description', 'category', 'status', 'created_at', 'updated_at', 'credit_cost'],
+  course_enrollments: ['id', 'course_id', 'learner_id', 'status', 'progress', 'exam_state', 'certificate_state', 'enrolled_at', 'completed_at', 'updated_at'],
+  lectures: ['id', 'course_id', 'title', 'description', 'order', 'duration_minutes', 'scheduled_at', 'status', 'created_at', 'updated_at'],
+  lecture_attendance: ['id', 'lecture_id', 'learner_id', 'status', 'minutes_attended', 'joined_at', 'left_at', 'created_at'],
+  exams: ['id', 'course_id', 'title', 'description', 'time_limit_mins', 'pass_mark_percentage', 'status', 'created_at', 'updated_at'],
+  exam_questions: ['id', 'exam_id', 'question_text', 'options', 'correct_option_idx', 'order', 'created_at', 'updated_at'],
+  exam_attempts: ['id', 'exam_id', 'learner_id', 'status', 'score_percentage', 'answers', 'submitted_at', 'created_at'],
+  certificate_requests: ['id', 'course_id', 'learner_id', 'score_snapshot', 'tutor_decision', 'admin_decision', 'reviewer_id', 'created_at', 'updated_at'],
+  certificates: ['id', 'certificate_number', 'request_id', 'learner_id', 'course_id', 'issued_at', 'verification_metadata'],
+  lecture_messages: ['id', 'lecture_id', 'sender_id', 'body', 'created_at'],
+  community_posts: ['id', 'author_id', 'title', 'content', 'category', 'created_at', 'updated_at'],
+  post_comments: ['id', 'post_id', 'author_id', 'content', 'created_at', 'updated_at'],
+  post_reactions: ['id', 'post_id', 'user_id', 'type', 'created_at'],
+};
+
+const adminTables = Object.keys(adminTableAllowlists);
 
 const serializeUser = (user, profile, token) => ({
   _id: user.id,
@@ -247,18 +267,104 @@ const getPublicProfiles = async (req, res, next) => {
 const getAdminTableData = async (req, res, next) => {
   try {
     const table = String(req.params.table || '');
-    if (!adminTables.includes(table)) {
-      return res.status(404).json({ message: 'Unknown database table' });
+    const allowedColumns = adminTableAllowlists[table];
+    if (!allowedColumns) {
+      return res.status(404).json({ message: 'Unknown or unauthorized database table' });
     }
     const page = Math.max(1, Number.parseInt(req.query.page, 10) || 1);
     const pageSize = Math.min(100, Math.max(1, Number.parseInt(req.query.pageSize, 10) || 25));
     const from = (page - 1) * pageSize;
     const { data, error, count } = await supabase
       .from(table)
-      .select('*', { count: 'exact' })
+      .select(allowedColumns.join(', '), { count: 'exact' })
       .range(from, from + pageSize - 1);
     if (error) return next(error);
     return res.json({ table, rows: data || [], total: count || 0, page, pageSize });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getAdminOverviewMetrics = async (req, res, next) => {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const [
+      { count: totalUsers },
+      { count: activeCourses },
+      { count: pendingCourses },
+      { count: totalExchanges },
+      { count: recentEnrollments },
+      { count: recentCourses },
+      { count: recentExchanges },
+    ] = await Promise.all([
+      supabase.from('users').select('id', { count: 'exact', head: true }).is('deleted_at', null),
+      supabase.from('courses').select('id', { count: 'exact', head: true }).eq('status', 'published'),
+      supabase.from('courses').select('id', { count: 'exact', head: true }).eq('status', 'pending_review'),
+      supabase.from('exchanges').select('id', { count: 'exact', head: true }),
+      supabase.from('course_enrollments').select('id', { count: 'exact', head: true }).gte('enrolled_at', thirtyDaysAgo),
+      supabase.from('courses').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
+      supabase.from('exchanges').select('id', { count: 'exact', head: true }).gte('created_at', thirtyDaysAgo),
+    ]);
+
+    return res.json({
+      totalUsers: totalUsers || 0,
+      activeCourses: activeCourses || 0,
+      pendingCourses: pendingCourses || 0,
+      totalExchanges: totalExchanges || 0,
+      recentActivity: {
+        newEnrollments30d: recentEnrollments || 0,
+        newCourses30d: recentCourses || 0,
+        newExchanges30d: recentExchanges || 0,
+      },
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+const getRegistrationAnalytics = async (req, res, next) => {
+  try {
+    const daysLimit = Math.min(90, Math.max(7, Number.parseInt(req.query.days, 10) || 30));
+
+    // First attempt the RPC if migrated
+    const { data: rpcData, error: rpcError } = await supabase.rpc('get_user_registration_stats', { days_limit: daysLimit });
+    if (!rpcError && Array.isArray(rpcData) && rpcData.length > 0) {
+      return res.json(rpcData);
+    }
+
+    // Fallback: Query created_at for users created in the date range
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - daysLimit);
+    startDate.setHours(0, 0, 0, 0);
+
+    const { data: rows, error: selectError } = await supabase
+      .from('users')
+      .select('created_at')
+      .is('deleted_at', null)
+      .gte('created_at', startDate.toISOString())
+      .order('created_at', { ascending: true });
+
+    if (selectError) return next(selectError);
+
+    // Group counts per calendar day
+    const countMap = new Map();
+    for (let d = new Date(startDate); d <= new Date(); d.setDate(d.getDate() + 1)) {
+      const key = d.toISOString().slice(0, 10);
+      countMap.set(key, 0);
+    }
+
+    (rows || []).forEach(r => {
+      if (r.created_at) {
+        const key = new Date(r.created_at).toISOString().slice(0, 10);
+        if (countMap.has(key)) {
+          countMap.set(key, (countMap.get(key) || 0) + 1);
+        }
+      }
+    });
+
+    const result = Array.from(countMap.entries()).map(([date, count]) => ({ date, count }));
+    return res.json(result);
   } catch (error) {
     return next(error);
   }
@@ -501,6 +607,8 @@ module.exports = {
   getPublicProfiles,
   getAllUsers,
   getAdminTableData,
+  getAdminOverviewMetrics,
+  getRegistrationAnalytics,
   adminUpdateUser,
   adminDeleteUser,
 };

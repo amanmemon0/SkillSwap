@@ -5,19 +5,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useState, useEffect, useCallback } from 'react';
 import {
   ArrowLeft, Clock, ChevronLeft, ChevronRight, CheckCircle2,
-  XCircle, AlertTriangle, Send, FileText,
+  XCircle, AlertTriangle, Send, FileText, Loader2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
 import Navbar from '../components/Navbar';
-import { useLearningStore } from '../data/learningMockData';
+import { useLearningStore } from '../data/learningStore';
 
 export default function ExamPage() {
   const { courseId } = useParams<{ courseId: string }>();
   const nav = useNavigate();
   const store = useLearningStore();
 
+  const [loadingExam, setLoadingExam] = useState(true);
   const course = store.courses.find(c => c.id === courseId);
   const exam = course ? store.getExam(course.id) : null;
   const enrollment = course ? store.getEnrollment(course.id) : null;
@@ -29,6 +30,13 @@ export default function ExamPage() {
   const [result, setResult] = useState<{ score: number; passed: boolean } | null>(null);
   const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [started, setStarted] = useState(false);
+
+  // Fetch live exam on mount
+  useEffect(() => {
+    if (!courseId) return;
+    setLoadingExam(true);
+    store.loadExam(courseId).finally(() => setLoadingExam(false));
+  }, [courseId, store]);
 
   // Initialize
   useEffect(() => {
@@ -77,12 +85,43 @@ export default function ExamPage() {
     }
   }, [exam, answers, course, store]);
 
-  if (!course || !exam || !enrollment) {
+  if (store.loading || loadingExam) {
     return (
       <main className="min-h-screen bg-surface">
         <Navbar variant="auth" />
-        <div className="flex items-center justify-center py-32">
-          <p className="text-ink/50">Exam not available.</p>
+        <div className="flex items-center justify-center py-32 gap-3 text-ink/50">
+          <Loader2 size={20} className="animate-spin text-violet" />
+          <p className="text-sm font-medium">Loading exam details...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!course || !enrollment) {
+    return (
+      <main className="min-h-screen bg-surface">
+        <Navbar variant="auth" />
+        <div className="flex flex-col items-center justify-center py-32 text-center px-4">
+          <p className="text-ink/70 font-bold mb-2">Course not found or you are not enrolled as a learner.</p>
+          <Button onClick={() => nav('/learning')} className="mt-2 bg-violet/10 text-violet text-xs">
+            Back to My Learning
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!exam) {
+    return (
+      <main className="min-h-screen bg-surface">
+        <Navbar variant="auth" />
+        <div className="flex flex-col items-center justify-center py-32 text-center px-4">
+          <FileText size={36} className="mx-auto text-ink/25 mb-3" />
+          <p className="text-ink/80 font-bold mb-1">No exam has been published for this course yet.</p>
+          <p className="text-xs text-ink/40 mb-4 max-w-sm">Your instructor will publish the assessment when it is ready.</p>
+          <Button onClick={() => nav(`/learning/${courseId}`)} className="bg-violet/10 text-violet text-xs">
+            Back to Course
+          </Button>
         </div>
       </main>
     );

@@ -2,10 +2,10 @@
    Teaching Course Detail — Teacher's management view
    ═══════════════════════════════════════════════════════════ */
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   ArrowLeft, Users, BookOpen, FileText, Award, CheckCircle2, Clock,
-  Play, XCircle, Plus, CalendarClock, Loader2,
+  Play, Radio, Video, XCircle, Plus, CalendarClock, Loader2,
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { Avatar, Button } from '../components/ui/Primitives';
@@ -31,11 +31,40 @@ export default function TeachingCourseDetail() {
   const [confirmAction, setConfirmAction] = useState<{ type: string; id: string; name: string } | null>(null);
   const [showScheduleLecture, setShowScheduleLecture] = useState(false);
   const [showScheduleExam, setShowScheduleExam] = useState(false);
+  const [liveEnrollments, setLiveEnrollments] = useState<any[] | null>(null);
 
   const course = store.courses.find(c => c.id === courseId);
-  const enrollments = course ? store.getCourseEnrollments(course.id) : [];
   const lectures = course ? store.getCourseLectures(course.id) : [];
   const certRequests = course ? store.getCertificateRequests({ teacherId: store.currentUserId }).filter(r => r.courseId === course.id) : [];
+
+  const fetchEnrollments = async () => {
+    if (!courseId) return;
+    try {
+      const data = await api.getCourseEnrollments(courseId);
+      if (Array.isArray(data)) {
+        setLiveEnrollments(data.map((r: any) => ({
+          id: r.id,
+          courseId: r.course_id,
+          learnerId: r.learner_id,
+          learnerName: r.learner?.full_name || 'Learner',
+          progress: Number(r.progress || 0),
+          lecturesCompleted: (course?.totalLectures || 0) > 0 ? Math.round((Number(r.progress || 0) / 100) * (course?.totalLectures || 0)) : 0,
+          examStatus: r.exam_state || 'locked',
+          examScore: null,
+          certificateStatus: r.certificate_state || 'locked',
+          enrolledAt: r.enrolled_at ? new Date(r.enrolled_at).toLocaleDateString() : 'Recently',
+        })));
+      }
+    } catch {
+      // Fallback to store if not accessible
+    }
+  };
+
+  useEffect(() => {
+    fetchEnrollments();
+  }, [courseId, course?.totalLectures]);
+
+  const enrollments = liveEnrollments !== null ? liveEnrollments : (course ? store.getCourseEnrollments(course.id) : []);
 
   // localStorage-based exam scheduling (no backend column yet)
   const getExamScheduledAt = (id: string) => localStorage.getItem(`ss_exam_schedule_${id}`);
@@ -79,12 +108,15 @@ export default function TeachingCourseDetail() {
     try {
       if (type === 'schedule-exam') {
         await store.scheduleExam(course.id, id);
+        await fetchEnrollments();
         show(`Exam scheduled for ${name}`, 'success');
       } else if (type === 'approve-cert') {
         await store.approveCertificateTutor(id);
+        await fetchEnrollments();
         show(`Certificate approved for ${name}`, 'success');
       } else if (type === 'reject-cert') {
         await store.rejectCertificateTutor(id);
+        await fetchEnrollments();
         show(`Certificate rejected for ${name}`, 'warning');
       }
     } catch (err: any) {
@@ -121,6 +153,103 @@ export default function TeachingCourseDetail() {
             <span className="text-5xl">{course.icon}</span>
           </div>
         </motion.div>
+
+        {/* ── Active / Upcoming Lecture Quick Action for Instructor ── */}
+        {(() => {
+          const liveLecture = lectures.find(l => l.status === 'live' || l.status === 'in-progress');
+          const nextLecture = !liveLecture ? lectures.find(l => l.status === 'upcoming') : null;
+
+          if (liveLecture) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-rose-500/10 via-red-500/5 to-white border border-rose-200 p-5 shadow-sm"
+              >
+                <div className="flex items-center gap-3.5">
+                  <span className="relative flex h-3.5 w-3.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-rose-600"></span>
+                  </span>
+                  <div>
+                    <span className="inline-block rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rose-700">
+                      Classroom Live Now
+                    </span>
+                    <p className="mt-0.5 text-base font-bold text-ink">Lecture {liveLecture.order}: {liveLecture.title}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={() => nav(`/teaching/${course.id}/lecture/${liveLecture.id}`)}
+                    className="bg-gradient-to-r from-rose-500 to-red-600 text-white text-xs font-bold py-2.5 px-5 shadow-sm hover:shadow-glow flex items-center gap-2"
+                  >
+                    <Radio size={14} className="animate-pulse" /> Join Live Classroom
+                  </Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await api.updateLecture(liveLecture.id, { status: 'completed' });
+                        await store.refresh();
+                      } catch {}
+                    }}
+                    className="bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 text-xs font-bold py-2.5 px-4 flex items-center gap-1.5"
+                  >
+                    <CheckCircle2 size={14} /> End Lecture
+                  </Button>
+                </div>
+              </motion.div>
+            );
+          }
+
+          if (nextLecture) {
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-violet/10 via-electric/5 to-white border border-violet/20 p-5 shadow-sm"
+              >
+                <div className="flex items-center gap-3.5">
+                  <div className="grid h-10 w-10 place-items-center rounded-2xl bg-gradient-to-br from-violet to-electric text-white font-extrabold text-sm shadow-sm">
+                    {nextLecture.order}
+                  </div>
+                  <div>
+                    <span className="inline-block rounded-full bg-violet/10 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-violet">
+                      Ready to Teach
+                    </span>
+                    <p className="mt-0.5 text-base font-bold text-ink">Lecture {nextLecture.order}: {nextLecture.title}</p>
+                    {nextLecture.scheduledAt && (
+                      <p className="text-xs text-ink/40">
+                        Scheduled for {new Date(nextLecture.scheduledAt).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={async () => {
+                      try {
+                        await api.updateLecture(nextLecture.id, { status: 'live' });
+                        await store.refresh();
+                      } catch {}
+                      nav(`/teaching/${course.id}/lecture/${nextLecture.id}`);
+                    }}
+                    className="bg-gradient-to-r from-violet to-electric text-white text-xs font-bold py-2.5 px-5 shadow-sm hover:shadow-glow flex items-center gap-2"
+                  >
+                    <Play size={13} className="fill-white" /> Start Lecture
+                  </Button>
+                  <Button
+                    onClick={() => nav(`/teaching/${course.id}/lecture/${nextLecture.id}`)}
+                    className="bg-white border border-ink/10 text-ink text-xs font-bold py-2.5 px-4 hover:bg-ink/5 flex items-center gap-1.5"
+                  >
+                    <Video size={13} /> Join
+                  </Button>
+                </div>
+              </motion.div>
+            );
+          }
+
+          return null;
+        })()}
 
         {/* Tabs */}
         <div className="mt-6 flex gap-1 rounded-2xl bg-white p-1.5 shadow-card border border-ink/5">

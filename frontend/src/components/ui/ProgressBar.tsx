@@ -12,7 +12,7 @@ export function ProgressBar({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  const pct = Math.min(100, Math.round((value / max) * 100));
+  const pct = max > 0 ? Math.min(100, Math.max(0, Math.round((value / max) * 100))) : 0;
   const heights = { sm: 'h-1.5', md: 'h-2.5', lg: 'h-4' };
   return (
     <div className={`w-full ${className}`}>
