@@ -9,7 +9,10 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DailyProvider, DailyAudio, useParticipantIds } from '@daily-co/daily-react';
+import {
+  DailyProvider, DailyAudio, useParticipantIds,
+  useParticipantProperty, useLocalSessionId,
+} from '@daily-co/daily-react';
 import { Avatar, Button } from '../components/ui/Primitives';
 import { VideoTile } from '../components/ui/VideoTile';
 import { ConfirmModal } from '../components/ui/ConfirmModal';
@@ -45,6 +48,31 @@ export default function LiveLecture() {
       {/* DailyAudio handles all remote audio routing automatically */}
       <DailyAudio />
     </DailyProvider>
+  );
+}
+
+/* ─── Participant name display hook ─── */
+function useDailyParticipantName(sessionId: string): string {
+  const name = useParticipantProperty(sessionId, 'user_name') as string | undefined;
+  return name || 'Participant';
+}
+
+/* ─── Remote participant tile that always renders the remote video ─── */
+function RemoteParticipantTile({
+  sessionId,
+  isFeatured = false,
+}: {
+  sessionId: string;
+  isFeatured?: boolean;
+}) {
+  const name = useDailyParticipantName(sessionId);
+  return (
+    <VideoTile
+      key={sessionId}
+      sessionId={sessionId}
+      userName={name}
+      isFeatured={isFeatured}
+    />
   );
 }
 
@@ -148,7 +176,6 @@ function LiveLectureInner() {
         store.completeLecture(course.id, lecture.id, e.learnerId);
       });
       show('Lecture marked as done! Ending session...', 'success');
-      // End the lecture and disconnect
       await leave();
       nav(`/teaching/${courseId}`);
     } else {
@@ -163,16 +190,10 @@ function LiveLectureInner() {
     nav(isTeacher ? `/teaching/${courseId}` : `/learning/${courseId}`);
   };
 
-  /* ─── Build participants list for sidebar ─── */
-  const sidebarParticipants = [
-    { id: course.teacherId, name: course.teacherName, role: 'tutor' as const, isOnline: true },
-    ...enrollments.map(e => ({
-      id: e.learnerId,
-      name: e.learnerName,
-      role: 'learner' as const,
-      isOnline: callState === 'joined' ? Math.random() > 0.2 : false,
-    })),
-  ];
+  /* ─── Build participants list from ACTUAL Daily.co participants ─── */
+  // We always show the local user + all remote participants that Daily knows about.
+  // We do NOT rely on store enrollment data for the sidebar — that was the old bug.
+  const totalParticipantCount = 1 + participantIds.length; // local + remote
 
   /* ═══════════════════════════════════════════════════════
      Pre-Join Screen (Hair Check)
@@ -247,10 +268,16 @@ function LiveLectureInner() {
   /* ═══════════════════════════════════════════════════════
      In-Call Interface
      ═══════════════════════════════════════════════════════ */
+
+  // Are there remote participants in the call right now?
+  const hasRemoteParticipants = participantIds.length > 0;
+  // The first remote participant's session ID (shown as the featured tile)
+  const featuredRemoteId = participantIds[0] ?? null;
+
   return (
     <main className="min-h-screen bg-ink text-white flex flex-col">
       {/* ─── Top Bar ─── */}
-      <header className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+      <header className="flex items-center justify-between border-b border-white/10 px-4 py-3 shrink-0">
         <div className="flex items-center gap-4">
           <button onClick={() => setShowLeave(true)} className="rounded-lg p-2 hover:bg-white/10 transition">
             <ArrowLeft size={18} />
@@ -279,43 +306,71 @@ function LiveLectureInner() {
       {/* ─── Main Layout ─── */}
       <div className="flex-1 flex overflow-hidden">
         {/* Video Area */}
-        <div className="flex-1 flex flex-col p-4 gap-4">
-          {/* Featured video (local user or first remote) */}
-          <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10">
-            <VideoTile
-              sessionId={localSessionId || ''}
-              localStream={localMediaStream}
-              userName={store.currentUserName}
-              isLocal
-              isFeatured
-              isCamOn={isCamOn}
-              isMicOn={isMicOn}
-              badge={isTeacher ? '🎓 Tutor' : undefined}
-            />
-            {isScreenSharing && (
-              <div className="absolute top-4 right-4 rounded-full bg-emerald-500/80 backdrop-blur px-3 py-1 text-xs font-bold">
-                🖥 Screen Sharing
-              </div>
-            )}
-          </div>
+        <div className="flex-1 flex flex-col p-3 gap-3 min-h-0">
 
-          {/* Remote participants video grid */}
-          <div className="flex gap-3 overflow-x-auto pb-1">
-            {participantIds.map(pid => (
-              <VideoTile
-                key={pid}
-                sessionId={pid}
-              />
-            ))}
-            {/* If no remote participants yet, show placeholders */}
-            {participantIds.length === 0 && (
-              <div className="h-28 w-40 shrink-0 rounded-xl border border-dashed border-white/10 flex items-center justify-center">
-                <p className="text-[10px] text-white/30 text-center px-2">
-                  Waiting for others to join…
-                </p>
+          {hasRemoteParticipants ? (
+            /* ── TWO-PERSON LAYOUT: remote is big, local is small overlay ── */
+            <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10 min-h-0">
+              {/* Featured: first remote participant fills the space */}
+              <RemoteParticipantTile sessionId={featuredRemoteId!} isFeatured />
+
+              {/* Local video: picture-in-picture in the bottom-right */}
+              <div className="absolute bottom-4 right-4 w-44 h-32 rounded-xl overflow-hidden border-2 border-white/20 shadow-2xl z-10">
+                <VideoTile
+                  sessionId={localSessionId || ''}
+                  localStream={localMediaStream}
+                  userName={currentUserName}
+                  isLocal
+                  isCamOn={isCamOn}
+                  isMicOn={isMicOn}
+                  badge={isTeacher ? '🎓 You (Tutor)' : ''}
+                />
               </div>
-            )}
-          </div>
+
+              {/* Extra remote participants grid (for 3+ person calls) */}
+              {participantIds.length > 1 && (
+                <div className="absolute bottom-4 left-4 flex flex-col gap-2 z-10">
+                  {participantIds.slice(1).map(pid => (
+                    <div key={pid} className="w-32 h-24 rounded-xl overflow-hidden border border-white/20">
+                      <RemoteParticipantTile sessionId={pid} />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Screen share overlay */}
+              {isScreenSharing && (
+                <div className="absolute top-4 left-4 rounded-full bg-emerald-500/80 backdrop-blur px-3 py-1 text-xs font-bold z-10">
+                  🖥 Screen Sharing
+                </div>
+              )}
+            </div>
+          ) : (
+            /* ── SOLO LAYOUT: only local user, waiting for others ── */
+            <div className="flex-1 flex flex-col gap-3 min-h-0">
+              <div className="flex-1 relative rounded-2xl overflow-hidden border border-white/10">
+                <VideoTile
+                  sessionId={localSessionId || ''}
+                  localStream={localMediaStream}
+                  userName={currentUserName}
+                  isLocal
+                  isFeatured
+                  isCamOn={isCamOn}
+                  isMicOn={isMicOn}
+                  badge={isTeacher ? '🎓 Tutor' : undefined}
+                />
+                {/* Waiting overlay when alone */}
+                <div className="absolute inset-x-0 top-4 flex justify-center pointer-events-none">
+                  <div className="flex items-center gap-2 rounded-full bg-black/50 backdrop-blur px-4 py-2">
+                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
+                    <span className="text-xs font-bold text-white/70">
+                      Waiting for others to join…
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ─── Side Panel ─── */}
@@ -323,17 +378,18 @@ function LiveLectureInner() {
           {(participantsOpen || chatOpen) && (
             <motion.aside
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 320, opacity: 1 }}
+              animate={{ width: 300, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
-              className="border-l border-white/10 bg-ink/50 flex flex-col overflow-hidden"
+              className="border-l border-white/10 bg-ink/50 flex flex-col overflow-hidden shrink-0"
             >
               {/* Panel Tabs */}
-              <div className="flex border-b border-white/10">
+              <div className="flex border-b border-white/10 shrink-0">
                 <button
                   onClick={() => { setParticipantsOpen(true); setChatOpen(false); }}
                   className={`flex-1 px-4 py-3 text-xs font-bold transition ${participantsOpen && !chatOpen ? 'text-white border-b-2 border-violet' : 'text-white/40 hover:text-white/60'}`}
                 >
-                  <Users size={14} className="inline mr-1.5" /> Participants ({sidebarParticipants.length})
+                  <Users size={14} className="inline mr-1.5" />
+                  People ({totalParticipantCount})
                 </button>
                 <button
                   onClick={() => { setChatOpen(true); setParticipantsOpen(false); }}
@@ -343,19 +399,34 @@ function LiveLectureInner() {
                 </button>
               </div>
 
-              {/* Participants */}
+              {/* ── Participants: sourced from actual Daily.co participants ── */}
               {participantsOpen && !chatOpen && (
                 <div className="flex-1 overflow-y-auto p-3 space-y-1">
-                  {sidebarParticipants.map(p => (
-                    <div key={p.id} className="flex items-center gap-3 rounded-xl p-2.5 hover:bg-white/5 transition">
-                      <Avatar name={p.name} size="sm" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{p.name}</p>
-                        <p className="text-[10px] text-white/40 uppercase tracking-wider">{p.role}</p>
-                      </div>
-                      <span className={`h-2 w-2 rounded-full ${p.isOnline ? 'bg-emerald-400' : 'bg-gray-500'}`} />
+                  {/* Local user (always shown first) */}
+                  <div className="flex items-center gap-3 rounded-xl p-2.5 bg-white/5">
+                    <Avatar name={currentUserName} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-bold truncate">{currentUserName}</p>
+                      <p className="text-[10px] text-white/40 uppercase tracking-wider">
+                        {isTeacher ? 'tutor · you' : 'learner · you'}
+                      </p>
                     </div>
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                  </div>
+
+                  {/* Remote participants (from Daily.co) */}
+                  {participantIds.map(pid => (
+                    <RemoteParticipantSidebarRow key={pid} sessionId={pid} />
                   ))}
+
+                  {/* No one else yet */}
+                  {participantIds.length === 0 && (
+                    <p className="mt-4 text-center text-xs text-white/30 px-4">
+                      {isTeacher
+                        ? 'Learners will appear here when they join.'
+                        : 'The tutor will appear here when they join.'}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -363,6 +434,11 @@ function LiveLectureInner() {
               {chatOpen && (
                 <div className="flex-1 flex flex-col overflow-hidden">
                   <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                    {chatMessages.length === 0 && (
+                      <p className="text-center text-xs text-white/30 mt-8">
+                        No messages yet. Say hello! 👋
+                      </p>
+                    )}
                     {chatMessages.map(msg => (
                       <div key={msg.id} className={`${msg.senderId === currentUserId ? 'text-right' : ''}`}>
                         <p className="text-[10px] font-bold text-white/40">{msg.senderName} · {msg.timestamp}</p>
@@ -377,7 +453,7 @@ function LiveLectureInner() {
                     ))}
                     <div ref={chatEndRef} />
                   </div>
-                  <div className="border-t border-white/10 p-3">
+                  <div className="border-t border-white/10 p-3 shrink-0">
                     <div className="flex items-center gap-2">
                       <input
                         value={chatInput}
@@ -402,7 +478,7 @@ function LiveLectureInner() {
       </div>
 
       {/* ─── Bottom Toolbar ─── */}
-      <footer className="border-t border-white/10 px-4 py-3">
+      <footer className="border-t border-white/10 px-4 py-3 shrink-0">
         <div className="flex items-center justify-center gap-2 sm:gap-3">
           <ToolbarButton active={isMicOn} onClick={toggleMic} icon={isMicOn ? Mic : MicOff} label={isMicOn ? 'Mute' : 'Unmute'} />
           <ToolbarButton active={isCamOn} onClick={toggleCam} icon={isCamOn ? Video : VideoOff} label={isCamOn ? 'Stop Video' : 'Start Video'} />
@@ -457,6 +533,21 @@ function LiveLectureInner() {
       )}
       <ToastContainer toasts={toasts} onDismiss={dismiss} />
     </main>
+  );
+}
+
+/* ─── Sidebar row for a remote Daily.co participant ─── */
+function RemoteParticipantSidebarRow({ sessionId }: { sessionId: string }) {
+  const name = useDailyParticipantName(sessionId);
+  return (
+    <div className="flex items-center gap-3 rounded-xl p-2.5 hover:bg-white/5 transition">
+      <Avatar name={name} size="sm" />
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-bold truncate">{name}</p>
+        <p className="text-[10px] text-white/40 uppercase tracking-wider">connected</p>
+      </div>
+      <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+    </div>
   );
 }
 

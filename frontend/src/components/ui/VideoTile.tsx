@@ -57,7 +57,7 @@ export function VideoTile({
   return (
     <div
       className={`relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-ink to-violet/10 ${
-        isFeatured ? 'flex-1' : 'h-28 w-40 shrink-0'
+        isFeatured ? 'flex-1 w-full h-full' : 'w-full h-full'
       }`}
     >
       {/* Video stream */}
