@@ -41,8 +41,7 @@ export default function Messages() {
       const me = await api.getMe();
       setUserId(me._id);
 
-      let convs = await api.getConversations();
-
+      const convs = await api.getConversations();
       const chatsList: Chat[] = [];
 
       for (const conv of convs || []) {
@@ -51,11 +50,7 @@ export default function Messages() {
         const otherName = otherUser?.full_name || 'Member';
 
         let dbMsgs: any[] = [];
-        try {
-          dbMsgs = await api.getMessages(conv.id);
-        } catch (e) {
-          console.error(`Failed to load messages for conv ${conv.id}:`, e);
-        }
+        try { dbMsgs = await api.getMessages(conv.id); } catch {}
 
         const mappedMsgs: Message[] = (dbMsgs || []).map((m: any) => ({
           id: m.id,
@@ -65,15 +60,12 @@ export default function Messages() {
         }));
 
         chatsList.push({
-          id: conv.id,
-          name: otherName,
+          id: conv.id, name: otherName,
           avatar: otherName.charAt(0).toUpperCase(),
           lastMessage: mappedMsgs[mappedMsgs.length - 1]?.text || 'No messages yet',
-          time: 'Active',
-          unread: false,
-          online: true,
+          time: 'Active', unread: false, online: true,
           skill: otherUser?.primary_skill || 'Collaboration',
-          messages: mappedMsgs
+          messages: mappedMsgs,
         });
       }
 
@@ -88,9 +80,33 @@ export default function Messages() {
     }
   };
 
+  // Real-time: polls only the ACTIVE conversation messages every 2 seconds
+  const pollActiveMessages = async (convId: string, myId: string) => {
+    try {
+      const dbMsgs = await api.getMessages(convId);
+      const mapped: Message[] = (dbMsgs || []).map((m: any) => ({
+        id: m.id,
+        sender: m.sender_id === myId ? 'me' : 'them',
+        text: m.body || '',
+        timestamp: new Date(m.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }));
+      setChats(prev => prev.map(c =>
+        c.id === convId
+          ? { ...c, messages: mapped, lastMessage: mapped[mapped.length - 1]?.text || c.lastMessage }
+          : c
+      ));
+    } catch { /* silently ignore */ }
+  };
+
+  useEffect(() => { fetchChats(); }, []);
+
+  // Poll active conversation every 2 s for near-instant message delivery
   useEffect(() => {
-    fetchChats();
-  }, []);
+    if (!activeChatId || !userId) return;
+    pollActiveMessages(activeChatId, userId);
+    const interval = setInterval(() => pollActiveMessages(activeChatId, userId), 2000);
+    return () => clearInterval(interval);
+  }, [activeChatId, userId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -102,11 +118,33 @@ export default function Messages() {
 
     const messageText = inputText.trim();
     setInputText('');
+
+    // Optimistic update — show my message instantly while the API call is in-flight
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      sender: 'me',
+      text: messageText,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    };
+    setChats(prev => prev.map(c =>
+      c.id === activeChatId
+        ? { ...c, messages: [...c.messages, optimisticMsg], lastMessage: messageText }
+        : c
+    ));
+
     try {
       await api.sendMessage(activeChatId, messageText);
-      await fetchChats();
+      // Immediately replace the optimistic message with the real server record
+      if (userId) pollActiveMessages(activeChatId, userId);
     } catch (err) {
       console.error('Send message error:', err);
+      // Revert optimistic message on failure
+      setChats(prev => prev.map(c =>
+        c.id === activeChatId
+          ? { ...c, messages: c.messages.filter(m => m.id !== optimisticId) }
+          : c
+      ));
       setInputText(messageText);
     }
   };
